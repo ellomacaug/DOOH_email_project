@@ -1,0 +1,239 @@
+<!-- app/templates/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>DOOH Email Sender</title>
+  <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap&subset=cyrillic" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <h1>📧 Массовая рассылка DOOH</h1>
+
+    <form
+      action="/send-emails"
+      hx-post="/send-emails"
+      hx-target="#status"
+      hx-swap="innerHTML"
+      method="POST"
+      enctype="multipart/form-data"
+    >
+    <label>1. Контактный Excel файл (.xlsx):</label>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <div style="max-width: 70%;">
+        Столбцы могут быть в любом порядке, но должны называться:<br>
+        * email – Почта<br>
+        * name – Имя (или пусто)<br>
+        * sm – ТЦ (Shopping Mall)<br>
+        * city – Город
+      </div>
+      <button
+        type="button"
+        class="download-btn"
+        onclick="window.open('https://docs.google.com/spreadsheets/d/1B0f-6vyHJng4F6IAkEKHo7Y4o-p3H1vb/edit?usp=sharing&ouid=115733225928091106688&rtpof=true&sd=true', '_blank')"
+        style="padding: 6px 12px; cursor: pointer;"
+      >
+        Скачать шаблон контактов
+      </button>
+    </div>
+
+
+    <input
+      type="file"
+      name="contacts_file"
+      required
+      id="contacts_file"
+      onchange="previewExcel(this.files[0])"
+    >
+
+    <label>Превью загруженного списка контактов:</label>
+    <div id="preview"></div>
+
+    <label>2. Бренд: <span class="hint">${BRAND}</span></label>
+    <input type="text" name="brand" list="brand-list" placeholder="Например: Лэтуаль" required>
+
+    <datalist id="brand-list"></datalist>
+
+    <label>3. Период: <span class="hint">${PERIOD}</span></label>
+    <input type="text" name="period" list="period-list" placeholder="Например: 01.09.2025 - 30.04.2026" required>
+
+    <datalist id="period-list"></datalist>
+
+    <label>4. Тема письма (предпросмотр):</label>
+    <div id="subject-preview-box" style="margin-bottom: 20px; font-size: 14px; color: #555; display: none;"></div>
+
+    <label>Шаблон письма:</label>
+    <textarea id="message_template" name="message_template" rows="16">{{ default_template }}</textarea>
+
+    <label>5. Кого в копию (CC) через запятую:</label>
+    <input type="text" name="cc_list" list="cc-list" placeholder="example1@mail.com, example2@mail.com">
+
+    <datalist id="cc-list"></datalist>
+
+    <button type="button" id="delayed-submit" class="primary-btn">📨 Отправить письма</button>
+    <div id="countdown-box" style="margin-top: 15px; display: none; color: #555;">
+      <span id="countdown-text">Отправка через 5 секунд...</span>
+      <button type="button" id="cancel-submit" style="margin-left: 10px; padding: 4px 12px; font-size: 14px;">⛔ Отменить</button>
+    </div>
+
+  </form>
+
+  <div id="status"></div>
+
+  <script>
+    const brandInput = document.querySelector('input[name="brand"]');
+    const periodInput = document.querySelector('input[name="period"]');
+    const subjectPreviewBox = document.getElementById('subject-preview-box');
+
+    function updateSubjectPreview() {
+      const brand = brandInput.value.trim();
+      const period = periodInput.value.trim();
+
+      const firstRowDiv = document.getElementById('first-row-data');
+      if (!firstRowDiv || !brand || !period) {
+        subjectPreviewBox.style.display = 'none';
+        return;
+      }
+
+      const sm = firstRowDiv.dataset.sm || '';
+      const city = firstRowDiv.dataset.city || '';
+      const subject = `${sm} (г. ${city}) // ${brand} // ${period}`;
+
+      subjectPreviewBox.innerText = subject;
+      subjectPreviewBox.style.display = 'block';
+    }
+
+    brandInput.addEventListener('input', updateSubjectPreview);
+    periodInput.addEventListener('input', updateSubjectPreview);
+  </script>
+  <script>
+    function previewExcel(file) {
+      if (!file) return;
+
+      const preview = document.getElementById("preview");
+      preview.innerHTML = '<div class="loading-spinner"></div>';
+
+      const formData = new FormData();
+      formData.append("contacts_file", file);
+
+      fetch("/preview-excel", {
+        method: "POST",
+        body: formData,
+      })
+        .then(response => {
+          if (!response.ok) throw new Error("Ошибка при чтении Excel");
+          return response.text();
+        })
+        .then(html => {
+          preview.innerHTML = html;
+          preview.style.border = "none";
+          preview.style.padding = "0";
+          preview.style.minHeight = "0";
+          updateSubjectPreview();
+        })
+        .catch(error => {
+          preview.innerHTML = `<div style="color:red;">❌ ${error.message}</div>`;
+        });
+    }
+  </script>
+  <script>
+    const form = document.querySelector("form");
+    const delayedBtn = document.getElementById("delayed-submit");
+    const countdownBox = document.getElementById("countdown-box");
+    const countdownText = document.getElementById("countdown-text");
+    const cancelBtn = document.getElementById("cancel-submit");
+
+    const contactsInput = document.getElementById("contacts_file");
+    const brandInput = document.querySelector('input[name="brand"]');
+    const periodInput = document.querySelector('input[name="period"]');
+    const templateInput = document.getElementById("message_template");
+
+    let countdownTimer;
+    let secondsLeft = 5;
+
+    function validateForm() {
+      if (!contactsInput.files.length) {
+        alert("Прикрепите файл с контактами.");
+        return false;
+      }
+
+      if (!brandInput.value.trim()) {
+        alert("Введите бренд.");
+        return false;
+      }
+
+      if (!periodInput.value.trim()) {
+        alert("Введите период.");
+        return false;
+      }
+
+      if (!templateInput.value.trim()) {
+        alert("Введите шаблон письма.");
+        return false;
+      }
+
+      return true;
+    }
+
+    delayedBtn.addEventListener("click", () => {
+      if (!validateForm()) return;
+
+      secondsLeft = 5;
+      countdownText.textContent = `Отправка через ${secondsLeft} секунд...`;
+      countdownBox.style.display = "block";
+      delayedBtn.disabled = true;
+
+      countdownTimer = setInterval(() => {
+        secondsLeft -= 1;
+        if (secondsLeft <= 0) {
+          clearInterval(countdownTimer);
+          form.submit();
+        } else {
+          countdownText.textContent = `Отправка через ${secondsLeft} секунд...`;
+        }
+      }, 1000);
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      clearInterval(countdownTimer);
+      countdownBox.style.display = "none";
+      delayedBtn.disabled = false;
+    });
+  </script>
+
+
+  <script>
+    const fields = [
+      { name: 'brand', listId: 'brand-list' },
+      { name: 'period', listId: 'period-list' },
+      { name: 'cc_list', listId: 'cc-list' }
+    ];
+
+    fields.forEach(({ name, listId }) => {
+      const input = document.querySelector(`input[name="${name}"]`);
+      const datalist = document.getElementById(listId);
+
+      // Загрузка сохранённых значений
+      const saved = JSON.parse(localStorage.getItem(name) || '[]');
+      saved.slice(-10).forEach(val => {
+        const option = document.createElement('option');
+        option.value = val;
+        datalist.appendChild(option);
+      });
+
+      // Сохранение нового значения при потере фокуса
+      input.addEventListener('blur', () => {
+        const value = input.value.trim();
+        if (!value) return;
+        let values = JSON.parse(localStorage.getItem(name) || '[]');
+        if (!values.includes(value)) {
+          values.push(value);
+          localStorage.setItem(name, JSON.stringify(values.slice(-10)));
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
