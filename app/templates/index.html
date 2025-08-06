@@ -12,8 +12,8 @@
   <h1>📧 Массовая рассылка DOOH</h1>
 
     <form
-      action="/send-emails"
       hx-post="/send-emails"
+      hx-trigger="submitForm"
       hx-target="#status"
       hx-swap="innerHTML"
       method="POST"
@@ -32,12 +32,10 @@
         type="button"
         class="download-btn"
         onclick="window.open('https://docs.google.com/spreadsheets/d/1B0f-6vyHJng4F6IAkEKHo7Y4o-p3H1vb/edit?usp=sharing&ouid=115733225928091106688&rtpof=true&sd=true', '_blank')"
-        style="padding: 6px 12px; cursor: pointer;"
       >
-        Скачать шаблон контактов
+        Шаблон контактов
       </button>
     </div>
-
 
     <input
       type="file"
@@ -71,11 +69,17 @@
 
     <datalist id="cc-list"></datalist>
 
-    <button type="button" id="delayed-submit" class="primary-btn">📨 Отправить письма</button>
-    <div id="countdown-box" style="margin-top: 15px; display: none; color: #555;">
-      <span id="countdown-text">Отправка через 5 секунд...</span>
-      <button type="button" id="cancel-submit" style="margin-left: 10px; padding: 4px 12px; font-size: 14px;">⛔ Отменить</button>
+    <div style="display: flex; align-items: center; gap: 16px; margin-top: 20px;">
+      <button type="button" id="delayed-submit" class="primary-btn">
+        <span class="emoji">📨</span>
+        <span class="text">Отправить письма</span>
+      </button>
+      <div id="countdown-box" style="display: none; color: #555; align-items: center; gap: 10px;">
+        <span id="countdown-text">Отправка через 5 секунд...</span>
+        <button type="button" id="cancel-submit" class="primary-btn cancel-btn">⛔ Отменить</button>
+      </div>
     </div>
+
 
   </form>
 
@@ -138,6 +142,7 @@
     }
   </script>
   <script>
+  document.addEventListener("DOMContentLoaded", () => {
     const form = document.querySelector("form");
     const delayedBtn = document.getElementById("delayed-submit");
     const countdownBox = document.getElementById("countdown-box");
@@ -154,22 +159,22 @@
 
     function validateForm() {
       if (!contactsInput.files.length) {
-        alert("Прикрепите файл с контактами.");
+        alert("❗ Прикрепите файл с контактами.");
         return false;
       }
 
       if (!brandInput.value.trim()) {
-        alert("Введите бренд.");
+        alert("❗ Введите бренд.");
         return false;
       }
 
       if (!periodInput.value.trim()) {
-        alert("Введите период.");
+        alert("❗ Введите период.");
         return false;
       }
 
       if (!templateInput.value.trim()) {
-        alert("Введите шаблон письма.");
+        alert("❗ Введите шаблон письма.");
         return false;
       }
 
@@ -188,7 +193,7 @@
         secondsLeft -= 1;
         if (secondsLeft <= 0) {
           clearInterval(countdownTimer);
-          form.submit();
+          htmx.trigger(form, "submitForm");
         } else {
           countdownText.textContent = `Отправка через ${secondsLeft} секунд...`;
         }
@@ -200,7 +205,8 @@
       countdownBox.style.display = "none";
       delayedBtn.disabled = false;
     });
-  </script>
+  });
+</script>
 
 
   <script>
