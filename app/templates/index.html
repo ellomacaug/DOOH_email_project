@@ -42,11 +42,16 @@
       name="contacts_file"
       required
       id="contacts_file"
-      onchange="previewExcel(this.files[0])"
+      onchange="handleFileChange(this.files[0])"
     >
 
     <label>Превью загруженного списка контактов:</label>
     <div id="preview"></div>
+
+    <label style="display: flex; align-items: center; gap: 8px; margin-top: 10px;">
+      <input type="checkbox" id="add-tc-prefix" checked>
+      Добавить "ТЦ" к названиям, где его нет
+    </label>
 
     <label>2. Бренд: <span class="hint">${BRAND}</span></label>
     <input type="text" name="brand" list="brand-list" placeholder="Например: Лэтуаль" required>
@@ -121,6 +126,9 @@
       const formData = new FormData();
       formData.append("contacts_file", file);
 
+      const addPrefix = document.getElementById("add-tc-prefix").checked;
+      formData.append("add_tc_prefix", addPrefix);
+
       fetch("/preview-excel", {
         method: "POST",
         body: formData,
@@ -140,6 +148,19 @@
           preview.innerHTML = `<div style="color:red;">❌ ${error.message}</div>`;
         });
     }
+
+    let uploadedFile = null;
+
+    function handleFileChange(file) {
+      uploadedFile = file;
+      previewExcel(file);
+    }
+    document.getElementById("add-tc-prefix").addEventListener("change", () => {
+      if (uploadedFile) {
+        previewExcel(uploadedFile);
+      }
+    });
+
   </script>
   <script>
   document.addEventListener("DOMContentLoaded", () => {

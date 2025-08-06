@@ -41,14 +41,16 @@ def preview_excel():
         df['name'] = df['name'].fillna('').astype(str)
         df.loc[df['name'].str.strip() == '', 'name'] = 'Коллеги'
 
+        add_prefix = request.form.get('add_tc_prefix', 'true').lower() == 'true'
+
         def fix_sm(sm_value):
             if not isinstance(sm_value, str):
                 return sm_value
-            prefixes = ("ТЦ", "ТРЦ", "ТРК", "ТД", "ТК")
             sm_value_strip = sm_value.strip()
+            prefixes = ("ТЦ", "ТРЦ", "ТРК", "ТД", "ТК")
             if any(sm_value_strip.startswith(prefix) for prefix in prefixes):
                 return sm_value_strip
-            return "ТЦ " + sm_value_strip
+            return "ТЦ " + sm_value_strip if add_prefix else sm_value_strip
 
         df['sm'] = df['sm'].apply(fix_sm)
 
