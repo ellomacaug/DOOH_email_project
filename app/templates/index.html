@@ -75,7 +75,7 @@
         <span class="text">Отправить письма</span>
       </button>
       <div id="countdown-box" style="display: none; color: #555; align-items: center; gap: 10px;">
-        <span id="countdown-text">Отправка через 5 секунд...</span>
+        <span id="countdown-text">Отправка через 5 сек...</span>
         <button type="button" id="cancel-submit" class="primary-btn cancel-btn">⛔ Отменить</button>
       </div>
     </div>
@@ -185,7 +185,7 @@
       if (!validateForm()) return;
 
       secondsLeft = 5;
-      countdownText.textContent = `Отправка через ${secondsLeft} секунд...`;
+      countdownText.textContent = `Отправка через ${secondsLeft} сек...`;
       countdownBox.style.display = "block";
       delayedBtn.disabled = true;
 
@@ -193,9 +193,11 @@
         secondsLeft -= 1;
         if (secondsLeft <= 0) {
           clearInterval(countdownTimer);
+          countdownBox.style.display = "none";
+          delayedBtn.disabled = false;
           htmx.trigger(form, "submitForm");
         } else {
-          countdownText.textContent = `Отправка через ${secondsLeft} секунд...`;
+          countdownText.textContent = `Отправка через ${secondsLeft} сек...`;
         }
       }, 1000);
     });
