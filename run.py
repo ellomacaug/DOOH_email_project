@@ -89,11 +89,27 @@ def send():
             period=period,
             template_text=template_text
         )
-        status = f"✅ Emails sent successfully to {len(contacts)} contacts."
+        count = len(contacts)
+        word = pluralize(count, ("адрес", "адреса", "адресов"))
+        status = f"✅ Письма успешно отправлены на {count} {word}."
     except Exception as e:
         error_trace = traceback.format_exc()
-        status = f"❌ Error occurred: {str(e)}\n\n<pre>{error_trace}</pre>"
+        status = f"❌ Ошибка: {str(e)}\n\n<pre>{error_trace}</pre>"
     return render_template("status.html", status=status)
+
+
+def pluralize(n, forms):
+
+    n = abs(n) % 100
+    n1 = n % 10
+
+    if 10 < n < 20:
+        return forms[2]
+    if 1 < n1 < 5:
+        return forms[1]
+    if n1 == 1:
+        return forms[0]
+    return forms[2]
 
 
 if __name__ == '__main__':
