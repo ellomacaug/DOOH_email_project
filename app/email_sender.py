@@ -31,10 +31,12 @@ def send_emails(my_address, password, contacts, cc_addresses, brand, period, tem
             name = contact.get('name')
             safe_name = name.title() if name and isinstance(name, str) and name.strip() else "Коллеги"
 
+            text = contact.get('text', '')
             message = template.safe_substitute(
                 NAME=safe_name,
                 BRAND=brand,
-                PERIOD=period
+                PERIOD=period,
+                TEXT=text or ''
             )
 
             msg['From'] = my_address

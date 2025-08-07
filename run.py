@@ -1,7 +1,7 @@
 # run.py
 
 import io
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from app.email_sender import send_emails, get_contacts_from_excel
 import os
 from dotenv import load_dotenv
@@ -14,19 +14,41 @@ load_dotenv()
 app = Flask(
     __name__,
     template_folder='app/templates',
-    static_folder='app/static'  # <-- вот оно, ключевое
+    static_folder='app/static'
 )
 app.config['UPLOAD_FOLDER'] = 'app/data'
+app.secret_key = os.urandom(24)
 
-MY_ADDRESS = os.getenv("MY_ADDRESS")
-PASSWORD = os.getenv("PASSWORD")
+# MY_ADDRESS = os.getenv("MY_ADDRESS")
+# PASSWORD = os.getenv("PASSWORD")
 
 
 @app.route('/')
 def index():
+    if 'MY_ADDRESS' not in session or 'PASSWORD' not in session:
+        return redirect(url_for('login'))
     with open('app/email_templates/message.txt', 'r', encoding='utf-8') as f:
         default_template = f.read()
     return render_template('index.html', default_template=default_template)
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+        if email and password:
+            session['MY_ADDRESS'] = email
+            session['PASSWORD'] = password
+            return redirect(url_for('index'))
+        return render_template('login.html', error="Заполните оба поля")
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 
 @app.route('/preview-excel', methods=['POST'])
@@ -40,6 +62,8 @@ def preview_excel():
 
         df['name'] = df['name'].fillna('').astype(str)
         df.loc[df['name'].str.strip() == '', 'name'] = 'Коллеги'
+        if 'text' in df:
+            df['text'] = df['text'].fillna('').astype(str)
 
         add_prefix = request.form.get('add_tc_prefix', 'true').lower() == 'true'
 
@@ -64,6 +88,8 @@ def preview_excel():
 
 @app.route('/send-emails', methods=['POST'])
 def send():
+    my_address = session.get("MY_ADDRESS")
+    password = session.get("PASSWORD")
     brand = request.form['brand']
     period = request.form['period']
     cc_input = request.form.get('cc_list', '')
@@ -71,7 +97,7 @@ def send():
     uploaded_file = request.files['contacts_file']
 
     if uploaded_file.filename == '':
-        return render_template("status.html", status="❌ No file uploaded.")
+        return render_template("status.html", status="❌ Файл не загружен.")
 
     filename = secure_filename(uploaded_file.filename)
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
@@ -81,8 +107,8 @@ def send():
     try:
         contacts = get_contacts_from_excel(file_path)
         send_emails(
-            my_address=MY_ADDRESS,
-            password=PASSWORD,
+            my_address=my_address,
+            password=password,
             contacts=contacts,
             cc_addresses=cc_addresses,
             brand=brand,
