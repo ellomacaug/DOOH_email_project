@@ -1,0 +1,329 @@
+<!-- app/templates/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>DOOH Email Client</title>
+  <script src="https://unpkg.com/htmx.org@1.9.2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap&subset=cyrillic" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="top-right">
+    <a href="/logout" class="secondary-btn" style="border: 2px solid;text-decoration: none;">Выйти</a>
+  </div>
+  <h1>📧 DOOH Email Client</h1>
+
+    <form
+      hx-post="/send-emails"
+      hx-trigger="submitForm"
+      hx-target="#status"
+      hx-swap="innerHTML"
+      method="POST"
+      enctype="multipart/form-data"
+    >
+
+    <label>1. Шаблон письма:</label>
+    <div class="template-tabs" id="template-tabs">
+      <div class="template-tab active" data-value="new_rim">Новый ТЦ</div>
+      <div class="template-tab" data-value="check_rim">Упакованный ТЦ</div>
+      <div class="template-tab" data-value="check">Напоминалка</div>
+      <div class="template-tab" data-value="confirm">Подтверждение</div>
+      <div class="template-tab" data-value="media">Ролики</div>
+      <div class="template-tab" data-value="close">Закрывающие</div>
+    </div>
+
+    <textarea id="message_template" name="message_template" rows="16" style="width:100%;">{{ default_template }}</textarea>
+    <input type="hidden" name="template_name" id="template_name" value="check">
+
+    <label>2. Контактный Excel файл (.xlsx):</label>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <div style="max-width: 70%;">
+        Выбрав нужный шаблон письма сверху, останутся только нужные поля по ссылке:<br>
+        <span style="color:red">*</span> mall – ТЦ<br>
+        <span style="color:red">*</span> city – Город<br>
+        <span style="color:red">*</span> email – Почта<br>
+        * name – Имя (или пусто)<br>
+        * rim – Носитель<br>
+        * link – Ссылка на ФО/ролики<br>
+        * min – Блок (мин)<br>
+        * sec – Хронометраж (сек)<br>
+        </div>
+      <button
+        type="button"
+        id="contacts-template-btn"
+        class="secondary-btn"
+      >
+        Шаблон файла контактов
+      </button>
+    </div>
+
+    <input
+      type="file"
+      name="contacts_file"
+      required
+      id="contacts_file"
+      onchange="handleFileChange(this.files[0])"
+    >
+
+    <label>Превью загруженного списка контактов:</label>
+    <div id="preview"></div>
+
+    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #949494;">
+      <input type="checkbox" id="add-tc-prefix" checked>
+      Добавить "ТЦ" к названиям, где его нет
+    </div>
+
+    <label>3. Бренд: <span class="hint">${BRAND}</span></label>
+    <input type="text" name="brand" list="brand-list" placeholder="Например: Лэтуаль" required>
+
+    <datalist id="brand-list"></datalist>
+
+    <label>4. Период: <span class="hint">${PERIOD}</span></label>
+    <input type="text" name="period" list="period-list" placeholder="Например: 01.09.2025 - 30.04.2026" required>
+
+    <datalist id="period-list"></datalist>
+
+    <label>5. Тема письма (предпросмотр):</label>
+    <div id="subject-preview-box" style="margin-bottom: 20px; font-size: 14px; color: #555; display: none;"></div>
+
+    <label>6. Ссылка на папку с реквизитами: <span class="hint">В подтверждение</span></label>
+    <input type="text" name="doc" list="doc-list" placeholder="https://example.com/..." style="width:100%;">
+
+    <datalist id="doc-list"></datalist>
+
+
+    <label>7. Кого в копию (CC) через запятую:</label>
+    <input type="text" name="cc_list" list="cc-list" placeholder="example1@mail.com, example2@mail.com">
+
+    <datalist id="cc-list"></datalist>
+
+    <div style="display: flex; align-items: center; gap: 16px; margin-top: 20px;">
+      <button type="button" id="delayed-submit" class="primary-btn">
+        <span class="emoji">📨</span>
+        <span class="text">Отправить письма</span>
+      </button>
+      <div id="countdown-box" style="display: none; color: #555; align-items: center; gap: 10px;">
+        <span id="countdown-text">Отправка через 5 сек...</span>
+        <button type="button" id="cancel-submit" class="primary-btn cancel-btn">⛔ Отменить</button>
+      </div>
+    </div>
+
+  </form>
+
+  <div id="status"></div>
+
+  <p style="text-align:center;">Сделано Ксюшей <3</p>
+  <p style="text-align:center;color: #555;font-size: 10px;">https://github.com/ellomacaug/DOOH_email_project</p>
+
+  <script>
+    const templates = {{ templates|tojson }};
+    const tabs = document.querySelectorAll('#template-tabs .template-tab');
+    const textarea = document.getElementById('message_template');
+    const hiddenInput = document.getElementById('template_name');
+    const contactsBtn = document.getElementById('contacts-template-btn');
+
+    const templateLinks = {
+      new_rim: 'https://docs.google.com/spreadsheets/d/1B0f-6vyHJng4F6IAkEKHo7Y4o-p3H1vb/edit?usp=sharing&ouid=115733225928091106688&rtpof=true&sd=true',
+      check_rim: 'https://docs.google.com/spreadsheets/d/1YZMw48rVNX3a73jUCeBghdMDPvJRzpAs/edit?usp=sharing&ouid=115733225928091106688&rtpof=true&sd=true',
+      check: 'https://docs.google.com/spreadsheets/d/1B0f-6vyHJng4F6IAkEKHo7Y4o-p3H1vb/edit?usp=sharing&ouid=115733225928091106688&rtpof=true&sd=true',
+      confirm: 'https://docs.google.com/spreadsheets/d/1YZMw48rVNX3a73jUCeBghdMDPvJRzpAs/edit?usp=sharing&ouid=115733225928091106688&rtpof=true&sd=true',
+      media: 'https://docs.google.com/spreadsheets/d/1PehBtIvRblqi4eHgjdWezGKo9IRyisSS/edit?usp=sharing&ouid=115733225928091106688&rtpof=true&sd=true',
+      close: 'https://docs.google.com/spreadsheets/d/1B0f-6vyHJng4F6IAkEKHo7Y4o-p3H1vb/edit?usp=sharing&ouid=115733225928091106688&rtpof=true&sd=true'
+    };
+
+    function setTemplate(templateKey) {
+      textarea.value = templates[templateKey];
+      hiddenInput.value = templateKey;
+      contactsBtn.onclick = () => window.open(templateLinks[templateKey], '_blank');
+    }
+
+    setTemplate('new_rim');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+
+        const templateKey = tab.dataset.value;
+        textarea.value = templates[templateKey];
+        hiddenInput.value = templateKey;
+        setTemplate(tab.dataset.value);
+      });
+    });
+  </script>
+  <script>
+    const brandInput = document.querySelector('input[name="brand"]');
+    const periodInput = document.querySelector('input[name="period"]');
+    const subjectPreviewBox = document.getElementById('subject-preview-box');
+
+    function updateSubjectPreview() {
+      const brand = brandInput.value.trim();
+      const period = periodInput.value.trim();
+
+      const firstRowDiv = document.getElementById('first-row-data');
+      if (!firstRowDiv || !brand || !period) {
+        subjectPreviewBox.style.display = 'none';
+        return;
+      }
+
+      const mall = firstRowDiv.dataset.mall || '';
+      const city = firstRowDiv.dataset.city || '';
+      const subject = `${mall} (г. ${city}) // ${brand} // ${period}`;
+
+      subjectPreviewBox.innerText = subject;
+      subjectPreviewBox.style.display = 'block';
+    }
+
+    brandInput.addEventListener('input', updateSubjectPreview);
+    periodInput.addEventListener('input', updateSubjectPreview);
+  </script>
+  <script>
+    function previewExcel(file) {
+      if (!file) return;
+
+      const preview = document.getElementById("preview");
+      preview.innerHTML = '<div class="loading-spinner"></div>';
+
+      const formData = new FormData();
+      formData.append("contacts_file", file);
+
+      const addPrefix = document.getElementById("add-tc-prefix").checked;
+      formData.append("add_tc_prefix", addPrefix);
+
+      fetch("/preview-excel", {
+        method: "POST",
+        body: formData,
+      })
+        .then(response => {
+          if (!response.ok) throw new Error("Ошибка при чтении Excel");
+          return response.text();
+        })
+        .then(html => {
+          preview.innerHTML = html;
+          preview.style.border = "none";
+          preview.style.padding = "0";
+          preview.style.minHeight = "0";
+          updateSubjectPreview();
+        })
+        .catch(error => {
+          preview.innerHTML = `<div style="color:red;">❌ ${error.message}</div>`;
+        });
+    }
+
+    let uploadedFile = null;
+
+    function handleFileChange(file) {
+      uploadedFile = file;
+      previewExcel(file);
+    }
+    document.getElementById("add-tc-prefix").addEventListener("change", () => {
+      if (uploadedFile) {
+        previewExcel(uploadedFile);
+      }
+    });
+
+  </script>
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const form = document.querySelector("form");
+    const delayedBtn = document.getElementById("delayed-submit");
+    const countdownBox = document.getElementById("countdown-box");
+    const countdownText = document.getElementById("countdown-text");
+    const cancelBtn = document.getElementById("cancel-submit");
+
+    const contactsInput = document.getElementById("contacts_file");
+    const brandInput = document.querySelector('input[name="brand"]');
+    const periodInput = document.querySelector('input[name="period"]');
+    const templateInput = document.getElementById("message_template");
+
+    let countdownTimer;
+    let secondsLeft = 5;
+
+    function validateForm() {
+      if (!contactsInput.files.length) {
+        alert("❗ Прикрепите файл с контактами.");
+        return false;
+      }
+
+      if (!brandInput.value.trim()) {
+        alert("❗ Введите бренд.");
+        return false;
+      }
+
+      if (!periodInput.value.trim()) {
+        alert("❗ Введите период.");
+        return false;
+      }
+
+      if (!templateInput.value.trim()) {
+        alert("❗ Введите шаблон письма.");
+        return false;
+      }
+
+      return true;
+    }
+
+    delayedBtn.addEventListener("click", () => {
+      if (!validateForm()) return;
+
+      secondsLeft = 5;
+      countdownText.textContent = `Отправка через ${secondsLeft} сек...`;
+      countdownBox.style.display = "block";
+      delayedBtn.disabled = true;
+
+      countdownTimer = setInterval(() => {
+        secondsLeft -= 1;
+        if (secondsLeft <= 0) {
+          clearInterval(countdownTimer);
+          countdownBox.style.display = "none";
+          delayedBtn.disabled = false;
+          htmx.trigger(form, "submitForm");
+        } else {
+          countdownText.textContent = `Отправка через ${secondsLeft} сек...`;
+        }
+      }, 1000);
+    });
+
+    cancelBtn.addEventListener("click", () => {
+      clearInterval(countdownTimer);
+      countdownBox.style.display = "none";
+      delayedBtn.disabled = false;
+    });
+  });
+</script>
+
+
+  <script>
+    const fields = [
+      { name: 'brand', listId: 'brand-list' },
+      { name: 'period', listId: 'period-list' },
+      { name: 'cc_list', listId: 'cc-list' },
+      { name: 'doc', listId: 'doc-list' }
+    ];
+
+    fields.forEach(({ name, listId }) => {
+      const input = document.querySelector(`input[name="${name}"]`);
+      const datalist = document.getElementById(listId);
+
+      const saved = JSON.parse(localStorage.getItem(name) || '[]');
+      saved.slice(-10).forEach(val => {
+        const option = document.createElement('option');
+        option.value = val;
+        datalist.appendChild(option);
+      });
+
+      input.addEventListener('blur', () => {
+        const value = input.value.trim();
+        if (!value) return;
+        let values = JSON.parse(localStorage.getItem(name) || '[]');
+        if (!values.includes(value)) {
+          values.push(value);
+          localStorage.setItem(name, JSON.stringify(values.slice(-10)));
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
