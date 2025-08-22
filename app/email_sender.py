@@ -100,6 +100,7 @@ def send_emails(my_address, password, contacts, cc_addresses, brand, period, doc
             msg['Subject'] = f"{contact['mall']} (г. {contact['city']}) // {brand} // {period}"
 
             msg.attach(MIMEText(message, 'plain'))
-            recipients = [contact['email']] + cc_addresses + [my_address]
+            recipients = [contact['email']] + cc_addresses
             server.send_message(msg, from_addr=my_address, to_addrs=recipients)
             del msg
+
