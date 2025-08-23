@@ -49,7 +49,8 @@ input[type="file"],
 input[type="email"],
 input[type="password"],
 textarea {
-  width: 100%;
+  width: calc(100% - 30px);
+  margin-right: 14px;
   padding: 12px 16px;
   border: 1px solid #dfe6e9;
   border-radius: 10px;
@@ -62,11 +63,6 @@ textarea:focus {
   outline: none;
   border-color: #2980b9;
   background-color: #f2edfa;
-}
-
-input[type="email"],
-input[type="password"]{
-  width: 92%;
 }
 
 textarea {
@@ -104,7 +100,6 @@ small {
   gap: 10px;
   line-height: 1;
 }
-
 .primary-btn .emoji {
   font-size: 26px;
   line-height: 1;
@@ -114,14 +109,10 @@ small {
   position: relative;
   top: -5px;
 }
-
-
 .primary-btn .text {
   display: flex;
   align-items: center;
 }
-
-
 .primary-btn:hover {
   background-color: #361a6e;
 }
@@ -138,18 +129,15 @@ small {
 
 .secondary-btn {
   font-family: 'IBM Plex Mono', monospace;
-  color: #361a6e;
-  background-color: #9782c2
-  border: none;
   padding: 15px 16px;
   font-size: 17px;
   border-radius: 10px;
   cursor: pointer;
   transition: background-color 0.25s ease;
   white-space: nowrap;
-  border-color: #361a6e;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
 }
-
 .secondary-btn:hover {
   background-color: #361a6e;
   color: #f6f5f7;
@@ -217,7 +205,7 @@ small {
 
 .top-right {
   position: absolute;
-  top: 15px;
+  top: 0px;
   right: 20px;
   z-index: 1000;
   margin-top: 20px;
@@ -234,7 +222,6 @@ small {
   border-radius: 6px;
   background: #f5f5f5;
   cursor: pointer;
-  font-family: inherit;
   font-size: 14px;
   transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
@@ -245,3 +232,4 @@ small {
 }
 .template-tab:hover {
   background: #9277c9;
+}

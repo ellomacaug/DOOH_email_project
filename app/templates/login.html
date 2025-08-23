@@ -6,26 +6,26 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body style="max-width: 500px; margin: 60px auto;">
+<body style="max-width: 500px; margin: 40px auto;">
   <h1>🔐 Вход в систему</h1>
   {% if error %}
     <div style="color: red;">{{ error }}</div>
   {% endif %}
   <form method="POST">
     <label>Отображаемое имя:</label>
-    <input type="text" name="display_name" placeholder="Например: Анна Иванова">
+    <input type="text" name="display_name" style="width: calc(100% - 30px);" placeholder="Например: Анна Иванова">
 
     <label>Почта:</label>
-    <input type="email" name="email" required placeholder="you@doohrussia.ru">
+    <input type="email" name="email" style="width: calc(100% - 30px);" required placeholder="you@doohrussia.ru">
 
     <label>Пароль приложения:</label>
-    <input type="password" name="password" required placeholder="••••••••">
+    <input type="password" name="password" style="width: calc(100% - 30px);" required placeholder="••••••••">
 
-    <a href="https://yandex.ru/support/id/ru/authorization/app-passwords#create" style="margin-bottom: 20px; font-size: 14px; color: #555;">
+    <a href="https://yandex.ru/support/id/ru/authorization/app-passwords#create" style="margin-bottom: 20px; font-size: 14px; color: #757373;">
       Инструкция, как получить пароль<br>
     </a>
 
-    <button type="submit" class="primary-btn" style="margin-top: 10px;">Войти</button>
+    <button type="submit" class="primary-btn" style="margin-top: 30px;">Войти</button>
   </form>
 </body>
 </html>

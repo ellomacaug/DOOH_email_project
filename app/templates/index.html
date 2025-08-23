@@ -10,7 +10,7 @@
 </head>
 <body>
   <div class="top-right">
-    <a href="/logout" class="secondary-btn" style="border: 2px solid;text-decoration: none;">Выйти</a>
+    <a href="/logout" class="secondary-btn" style="border: 1px solid #361a6e; text-decoration: none;">Выйти</a>
   </div>
   <h1>📧 DOOH Email Client</h1>
 
@@ -33,13 +33,15 @@
       <div class="template-tab" data-value="close">Закрывающие</div>
     </div>
 
-    <textarea id="message_template" name="message_template" rows="16" style="width:100%;">{{ default_template }}</textarea>
+    <textarea id="message_template" name="message_template" rows="16">{{ default_template }}</textarea>
     <input type="hidden" name="template_name" id="template_name" value="check">
 
-    <label>2. Контактный Excel файл (.xlsx):</label>
+    <span style="color:#949494;">Проверьте подпись!</span>
+
+    <label style="margin-top: 10px;">2. Контактный Excel файл (.xlsx):</label>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
       <div style="max-width: 70%;">
-        Выбрав нужный шаблон письма сверху, останутся только нужные поля по ссылке:<br>
+        Выбрав нужный шаблон письма сверху, останутся только нужные поля по кнопке:<br>
         <span style="color:red">*</span> mall – ТЦ<br>
         <span style="color:red">*</span> city – Город<br>
         <span style="color:red">*</span> email – Почта<br>
@@ -54,7 +56,7 @@
         id="contacts-template-btn"
         class="secondary-btn"
       >
-        Шаблон файла контактов
+        Скачать<br><span style="font-size: 12px;">Шаблон файла контактов</span>
       </button>
     </div>
 
@@ -88,7 +90,7 @@
     <div id="subject-preview-box" style="margin-bottom: 20px; font-size: 14px; color: #555; display: none;"></div>
 
     <label>6. Ссылка на папку с реквизитами: <span class="hint">В подтверждение</span></label>
-    <input type="text" name="doc" list="doc-list" placeholder="https://example.com/..." style="width:100%;">
+    <input type="text" name="doc" list="doc-list" placeholder="https://example.com/...">
 
     <datalist id="doc-list"></datalist>
 
@@ -158,20 +160,16 @@
     const subjectPreviewBox = document.getElementById('subject-preview-box');
 
     function updateSubjectPreview() {
-      const brand = brandInput.value.trim();
-      const period = periodInput.value.trim();
-
-      const firstRowDiv = document.getElementById('first-row-data');
-      if (!firstRowDiv || !brand || !period) {
-        subjectPreviewBox.style.display = 'none';
-        return;
-      }
-
-      const mall = firstRowDiv.dataset.mall || '';
-      const city = firstRowDiv.dataset.city || '';
-      const subject = `${mall} (г. ${city}) // ${brand} // ${period}`;
-
-      subjectPreviewBox.innerText = subject;
+      const mall = document.getElementById('mall').value || 'Молл';
+      const city = document.getElementById('city').value || 'Город';
+      const brand = document.getElementById('brand').value || 'Бренд';
+      const period = document.getElementById('period').value || 'Период';
+      
+      // Remove double quotes from mall name
+      const cleanMall = mall.replace(/"/g, '');
+      
+      const subject = `${cleanMall} (г. ${city}) // ${brand} // ${period}`;
+      subjectPreviewBox.textContent = subject;
       subjectPreviewBox.style.display = 'block';
     }
 
