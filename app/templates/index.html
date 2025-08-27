@@ -160,16 +160,20 @@
     const subjectPreviewBox = document.getElementById('subject-preview-box');
 
     function updateSubjectPreview() {
-      const mall = document.getElementById('mall').value || 'Молл';
-      const city = document.getElementById('city').value || 'Город';
-      const brand = document.getElementById('brand').value || 'Бренд';
-      const period = document.getElementById('period').value || 'Период';
-      
-      // Remove double quotes from mall name
-      const cleanMall = mall.replace(/"/g, '');
-      
-      const subject = `${cleanMall} (г. ${city}) // ${brand} // ${period}`;
-      subjectPreviewBox.textContent = subject;
+      const brand = brandInput.value.trim();
+      const period = periodInput.value.trim();
+
+      const firstRowDiv = document.getElementById('first-row-data');
+      if (!firstRowDiv || !brand || !period) {
+        subjectPreviewBox.style.display = 'none';
+        return;
+      }
+
+      const mall = firstRowDiv.dataset.mall || '';
+      const city = firstRowDiv.dataset.city || '';
+      const subject = `${mall} (г. ${city}) // ${brand} // ${period}`;
+
+      subjectPreviewBox.innerText = subject;
       subjectPreviewBox.style.display = 'block';
     }
 

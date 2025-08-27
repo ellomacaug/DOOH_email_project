@@ -19,9 +19,6 @@ app = Flask(
 app.config['UPLOAD_FOLDER'] = 'app/data'
 app.secret_key = os.urandom(24)
 
-# MY_ADDRESS = os.getenv("MY_ADDRESS")
-# PASSWORD = os.getenv("PASSWORD")
-
 
 @app.route('/')
 def index():
@@ -46,7 +43,7 @@ def login():
         email = request.form['email']
         password = request.form['password']
 
-        if not display_name:
+        if not display_name and email:
             display_name = email.split('@')[0].replace('.', ' ').title()
 
         if email and password:
@@ -112,22 +109,31 @@ def preview_excel():
 
 @app.route('/send-emails', methods=['POST'])
 def send():
+    display_name = session.get("DISPLAY_NAME")
     my_address = session.get("MY_ADDRESS")
     password = session.get("PASSWORD")
-    brand = request.form['brand']
-    period = request.form['period']
-    doc = request.form['doc']
-    cc_input = request.form.get('cc_list', '')
-    cc_addresses = [email.strip() for email in cc_input.split(',') if email.strip()]
-    uploaded_file = request.files['contacts_file']
 
-    if uploaded_file.filename == '':
+    # 1) Guard: user must be logged in
+    if not my_address or not password:
+        return render_template("status.html", status="❌ Сессия истекла. Войдите снова."), 401
+
+    brand = request.form.get('brand', '').strip()
+    period = request.form.get('period', '').strip()
+    doc = request.form.get('doc', '').strip()
+
+    cc_addresses = [email.strip() for email in request.form.get('cc_list', '').split(',') if email.strip()]
+
+    uploaded_file = request.files.get('contacts_file')
+    if not uploaded_file or uploaded_file.filename == '':
         return render_template("status.html", status="❌ Файл не загружен.")
 
     filename = secure_filename(uploaded_file.filename)
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     uploaded_file.save(file_path)
-    template_text = request.form['message_template']
+    template_text = request.form.get('message_template', '')
+
+    if not display_name and my_address:
+        display_name = my_address.split('@')[0].replace('.', ' ').title()
 
     try:
         contacts = get_contacts_from_excel(file_path, template_text=template_text, doc=doc)
@@ -140,15 +146,15 @@ def send():
             period=period,
             doc=doc,
             template_text=template_text,
-            display_name=session.get('DISPLAY_NAME', my_address.split('@')[0].replace('.', ' ').title())
+            display_name=display_name
         )
         count = len(contacts)
         word = pluralize(count, ("адрес", "адреса", "адресов"))
         status = f"✅ Письма успешно отправлены на {count} {word}."
     except Exception as e:
-        error_trace = traceback.format_exc()
-        status = f"❌ Ошибка: {str(e)}\n\n"
+        status = f"❌ Ошибка: {str(e)}"
     return render_template("status.html", status=status)
+
 
 
 def pluralize(n, forms):
