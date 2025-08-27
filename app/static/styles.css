@@ -107,7 +107,6 @@ small {
   align-items: center;
   justify-content: center;
   position: relative;
-  top: -5px;
 }
 .primary-btn .text {
   display: flex;
