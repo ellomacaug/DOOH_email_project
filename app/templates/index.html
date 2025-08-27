@@ -23,7 +23,7 @@
       enctype="multipart/form-data"
     >
 
-    <label>1. Шаблон письма:</label>
+    <label>1. Шаблон письма</label>
     <div class="template-tabs" id="template-tabs">
       <div class="template-tab active" data-value="new_rim">Новый ТЦ</div>
       <div class="template-tab" data-value="check_rim">Упакованный ТЦ</div>
@@ -38,7 +38,7 @@
 
     <span style="color:#949494;">Проверьте подпись!</span>
 
-    <label style="margin-top: 10px;">2. Контактный Excel файл (.xlsx):</label>
+    <label style="margin-top: 10px;">2. Контактный Excel файл (.xlsx)</label>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
       <div style="max-width: 70%;">
         Выбрав нужный шаблон письма сверху, останутся только нужные поля по кнопке:<br>
@@ -75,26 +75,26 @@
       Добавить "ТЦ" к названиям, где его нет
     </div>
 
-    <label>3. Бренд: <span class="hint">${BRAND}</span></label>
+    <label>3. Бренд <span class="hint">${BRAND}</span></label>
     <input type="text" name="brand" list="brand-list" placeholder="Например: Лэтуаль" required>
 
     <datalist id="brand-list"></datalist>
 
-    <label>4. Период: <span class="hint">${PERIOD}</span></label>
+    <label>4. Период <span class="hint">${PERIOD}</span></label>
     <input type="text" name="period" list="period-list" placeholder="Например: 01.09.2025 - 30.04.2026" required>
 
     <datalist id="period-list"></datalist>
 
-    <label>5. Тема письма (предпросмотр):</label>
+    <label>5. Тема письма (предпросмотр)</label>
     <div id="subject-preview-box" style="margin-bottom: 20px; font-size: 14px; color: #555; display: none;"></div>
 
-    <label>6. Ссылка на папку с реквизитами: <span class="hint">В подтверждение</span></label>
+    <label>6. Ссылка на папку с реквизитами <span class="hint">В подтверждение</span></label>
     <input type="text" name="doc" list="doc-list" placeholder="https://example.com/...">
 
     <datalist id="doc-list"></datalist>
 
 
-    <label>7. Кого в копию (CC) через запятую:</label>
+    <label>7. Кого в копию (CC) через запятую</label>
     <input type="text" name="cc_list" list="cc-list" placeholder="example1@mail.com, example2@mail.com">
 
     <datalist id="cc-list"></datalist>
