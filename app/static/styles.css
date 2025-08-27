@@ -127,21 +127,37 @@ small {
   background-color: #f1b0b7;
 }
 
+
 .secondary-btn {
   font-family: 'IBM Plex Mono', monospace;
-  padding: 15px 16px;
-  font-size: 17px;
+  padding: 20px 25px;
+  font-size: 27px;
   border-radius: 10px;
   cursor: pointer;
-  transition: background-color 0.25s ease;
-  white-space: nowrap;
+  transition: background-color 0.25s ease, color 0.25s ease;
   border: 1px solid #ccc;
   background: #f5f5f5;
 }
+
 .secondary-btn:hover {
   background-color: #361a6e;
   color: #f6f5f7;
   border-color: #361a6e;
+}
+
+.button-with-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.button-description {
+  font-family: 'IBM Plex Mono', monospace;
+  color: #34495e;
+  font-weight: 600;
+  font-size: 16px;
+  margin-top: 10px;
 }
 
 #status {
