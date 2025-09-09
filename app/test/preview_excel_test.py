@@ -68,40 +68,66 @@ def test_preview_excel_empty_email_rows_returns_400(client):
     assert "строки без email" in text
 
 
-def test_preview_excel_success_adds_tc_prefix_and_hidden_attrs(client):
+def test_preview_excel_adds_tc_prefix(client):
     # Arrange
     rows = [
-        {
-            "email": "x@y.com",
-            "mall": "Афимолл",
-            "city": "Москва",
-            "name": "",
-            "rim": "111",
-        }
+        {"email": "x@y.com", "mall": "Афимолл", "city": "Москва", "name": "", "rim": "111"}
     ]
     bio = _excel_file_from_rows(rows)
 
     # Act
     resp = client.post(
         "/preview-excel",
-        data={
-            "contacts_file": (bio, "contacts.xlsx"),
-            "add_tc_prefix": "true",
-        },
+        data={"contacts_file": (bio, "contacts.xlsx"), "add_tc_prefix": "true"},
         content_type="multipart/form-data",
     )
 
     # Assert
     text = resp.get_data(as_text=True)
     assert resp.status_code == 200
-    # Mall prefix added and quotes stripped
-    assert "ТЦ Афимолл" in text
-    # Hidden div with first row data attributes present
+    assert "ТЦ Афимолл" in text  # prefix added
+
+
+def test_preview_excel_defaults_name_to_kollegi(client):
+    # Arrange
+    rows = [
+        {"email": "x@y.com", "mall": "Афимолл", "city": "Москва", "name": "", "rim": "111"}
+    ]
+    bio = _excel_file_from_rows(rows)
+
+    # Act
+    resp = client.post(
+        "/preview-excel",
+        data={"contacts_file": (bio, "contacts.xlsx"), "add_tc_prefix": "true"},
+        content_type="multipart/form-data",
+    )
+
+    # Assert
+    text = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "Коллеги" in text
+    
+
+def test_preview_excel_renders_hidden_first_row_attrs(client):
+    # Arrange
+    rows = [
+        {"email": "x@y.com", "mall": "Афимолл", "city": "Москва", "name": "", "rim": "111"}
+    ]
+    bio = _excel_file_from_rows(rows)
+
+    # Act
+    resp = client.post(
+        "/preview-excel",
+        data={"contacts_file": (bio, "contacts.xlsx"), "add_tc_prefix": "true"},
+        content_type="multipart/form-data",
+    )
+
+    # Assert
+    text = resp.get_data(as_text=True)
+    assert resp.status_code == 200
     assert 'id="first-row-data"' in text
     assert 'data-mall="ТЦ Афимолл"' in text
     assert 'data-city="Москва"' in text
-    # Default name substituted
-    assert "Коллеги" in text
 
 
 def test_preview_excel_no_prefix_when_disabled(client):
@@ -147,4 +173,3 @@ def test_preview_excel_groups_rim_with_br(client):
     assert "123<br>456" in text  # newline converted to <br>
     # Existing prefixes should not be duplicated
     assert "ТРЦ Мега" in text
-
