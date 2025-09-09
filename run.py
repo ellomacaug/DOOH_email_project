@@ -2,7 +2,7 @@
 
 import io
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from app.email_sender import send_emails, get_contacts_from_excel
+from app.email_sender import send_emails, get_contacts_from_excel, pluralize
 import os
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
@@ -168,21 +168,6 @@ def send():
     except Exception as e:
         status = f"❌ Ошибка: {str(e)}"
     return render_template("status.html", status=status)
-
-
-
-def pluralize(n, forms):
-
-    n = abs(n) % 100
-    n1 = n % 10
-
-    if 10 < n < 20:
-        return forms[2]
-    if 1 < n1 < 5:
-        return forms[1]
-    if n1 == 1:
-        return forms[0]
-    return forms[2]
 
 
 if __name__ == '__main__':

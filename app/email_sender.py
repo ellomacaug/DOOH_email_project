@@ -4,6 +4,7 @@ import smtplib
 import ssl
 import re
 import pandas as pd
+import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
@@ -11,8 +12,13 @@ from string import Template
 from pathlib import Path
 
 
+# SMTP settings
+SMTP_HOST = os.getenv("SMTP_HOST", "smtp.yandex.ru")
+SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
+SMTP_PROTOCOL = os.getenv("SMTP_PROTOCOL", "SSL").upper()
+
+
 def get_contacts_from_excel(filepath, template_text=None, doc=None):
-    # Read and keep only relevant columns (email, name, mall, city, rim)
     df = pd.read_excel(filepath)
     cols = [c for c in ['email', 'name', 'mall', 'city', 'rim'] if c in df.columns]
     if 'email' not in cols:
@@ -20,14 +26,6 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None):
     
     df = df[cols].fillna('').astype(str).apply(lambda x: x.str.strip())
     
-    # Split multi-email cells into primary + cc list, preserve other columns
-    def split_emails(email_str):
-        s = str(email_str)
-        # normalize separators to spaces
-        for sep in [',', ';', '/', '|', ' и ']:
-            s = s.replace(sep, ' ')
-        parts = [p.strip() for p in s.split() if p.strip()]
-        return parts
     
     email_regex = r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$'
     contacts = []
@@ -35,7 +33,6 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None):
         parts = split_emails(row['email'])
         if not parts:
             raise ValueError(f"❌ Строка {idx + 2} не содержит email. Удалите её или заполните.")
-        # validate all found emails
         for e in parts:
             if not re.match(email_regex, e):
                 raise ValueError(f"❌ Неверный формат email: {e} в строке {idx + 2}")
@@ -52,7 +49,6 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None):
         contacts.append(contact)
     
     df = pd.DataFrame(contacts)
-    # Normalize text fields
     for col in ['email', 'name', 'mall', 'city', 'rim']:
         if col in df.columns:
             df[col] = df[col].fillna('').astype(str).str.strip()
@@ -63,7 +59,6 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None):
     # Group by city,mall,email,name and concatenate rim with newline
     if 'rim' in df.columns:
         agg_map = {'rim': lambda x: '\n'.join(filter(lambda v: v != '', map(str, x)))}
-        # preserve aggregated cc emails (unique)
         if '_cc_emails' in df.columns:
             agg_map['_cc_emails'] = lambda lists: list({email for lst in lists for email in (lst if isinstance(lst, list) else [lst]) if email})
         df = df.groupby(['city', 'mall', 'email', 'name'], as_index=False).agg(agg_map)
@@ -110,15 +105,23 @@ def send_emails(my_address, password, contacts, cc_addresses, brand, period, doc
     context = ssl.create_default_context()
     cc_addresses = cc_addresses or []
 
-    with smtplib.SMTP_SSL('smtp.yandex.ru', 465, context=context) as server:
+    if SMTP_PROTOCOL == "SSL":
+        server_cm = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=context)
+    else:
+        server_cm = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+
+    with server_cm as server:
         server.set_debuglevel(1)
         server.ehlo()
+        if SMTP_PROTOCOL == "STARTTLS":
+            server.starttls(context=context)
+            server.ehlo()
+
         server.login(my_address, password)
 
         for contact in contacts:
             msg = MIMEMultipart()
-
-            # Clean up mall name by removing any existing double quotes for both subject and body
+            
             mall_name = contact['mall'].replace('"', '')
             
             message = template.safe_substitute(
@@ -133,9 +136,8 @@ def send_emails(my_address, password, contacts, cc_addresses, brand, period, doc
                 DOC=doc or ""
             )
 
-            # Get CC emails from both the contact and the additional CC addresses
             contact_cc = contact.get('_cc_emails', [])
-            all_cc = list(set(cc_addresses + contact_cc))  # Remove duplicates
+            all_cc = list(set(cc_addresses + contact_cc))
             
             msg['From'] = formataddr((display_name, my_address))
             msg['To'] = contact['email']
@@ -149,3 +151,24 @@ def send_emails(my_address, password, contacts, cc_addresses, brand, period, doc
             server.send_message(msg, from_addr=my_address, to_addrs=recipients)
             del msg
 
+
+def split_emails(email_str):
+    s = str(email_str)
+    for sep in [',', ';', '/', '|', ' и ']:
+        s = s.replace(sep, ' ')
+    parts = [p.strip() for p in s.split() if p.strip()]
+    return parts
+
+
+def pluralize(n, forms):
+
+    n = abs(n) % 100
+    n1 = n % 10
+
+    if 10 < n < 20:
+        return forms[2]
+    if 1 < n1 < 5:
+        return forms[1]
+    if n1 == 1:
+        return forms[0]
+    return forms[2]
