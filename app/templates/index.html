@@ -117,8 +117,9 @@
   <p style="text-align:center;">Сделано Ксюшей <3</p>
   <p style="text-align:center;color: #555;font-size: 10px;">https://github.com/ellomacaug/DOOH_email_project</p>
 
+  <script id="templates-data" type="application/json"> {{ templates|tojson }}</script>
   <script>
-    const templates = {{ templates|tojson }};
+    const templates = JSON.parse(document.getElementById('templates-data').textContent);
     const tabs = document.querySelectorAll('#template-tabs .template-tab');
     const textarea = document.getElementById('message_template');
     const hiddenInput = document.getElementById('template_name');
