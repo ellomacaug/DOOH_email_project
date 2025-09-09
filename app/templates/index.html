@@ -206,9 +206,16 @@
           preview.style.padding = "0";
           preview.style.minHeight = "0";
           updateSubjectPreview();
+
+          // Set status AFTER a successful upload/preview
+          const statusEl = document.getElementById('status');
+          if (statusEl) statusEl.textContent = "Waiting...";
         })
         .catch(error => {
           preview.innerHTML = `<div style="color:red;">❌ ${error.message}</div>`;
+          // Optional: clear status on error (keeps it empty if preview failed)
+          const statusEl = document.getElementById('status');
+          if (statusEl) statusEl.textContent = "";
         });
     }
 
@@ -223,7 +230,6 @@
         previewExcel(uploadedFile);
       }
     });
-
   </script>
   <script>
   document.addEventListener("DOMContentLoaded", () => {

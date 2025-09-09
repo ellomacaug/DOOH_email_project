@@ -211,3 +211,9 @@ __marimo__/
 
 .vscode/
 .vscode/settings.json
+
+.idea/
+.idea/*
+.idea
+.idea/.gitignore
+app/data/contacts.xlsx
