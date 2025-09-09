@@ -11,56 +11,62 @@ from string import Template
 from pathlib import Path
 
 
-import re
-
-
 def get_contacts_from_excel(filepath, template_text=None, doc=None):
+    # Read and keep only relevant columns (email, name, mall, city, rim)
     df = pd.read_excel(filepath)
-
-    if 'email' not in df.columns:
+    cols = [c for c in ['email', 'name', 'mall', 'city', 'rim'] if c in df.columns]
+    if 'email' not in cols:
         raise ValueError("❌ Нет обязательного столбца: email")
-        
-    # Process email column to handle multiple emails
+    
+    df = df[cols].fillna('').astype(str).apply(lambda x: x.str.strip())
+    
+    # Split multi-email cells into primary + cc list, preserve other columns
+    def split_emails(email_str):
+        s = str(email_str)
+        # normalize separators to spaces
+        for sep in [',', ';', '/', '|', ' и ']:
+            s = s.replace(sep, ' ')
+        parts = [p.strip() for p in s.split() if p.strip()]
+        return parts
+    
+    email_regex = r'^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$'
     contacts = []
     for idx, row in df.iterrows():
-        email_str = str(row.get('email', '')).strip()
-        if not email_str:
+        parts = split_emails(row['email'])
+        if not parts:
             raise ValueError(f"❌ Строка {idx + 2} не содержит email. Удалите её или заполните.")
-            
-        # Split by common separators and clean up
-        emails = []
-        for separator in [',', ';', ' и ', ' ', 'и', 'и ', ' и ', '  ']:
-            email_str = email_str.replace(separator, ' ')
-        emails = [e.strip() for e in email_str.split() if e.strip()]
-        
-        if not emails:
-            raise ValueError(f"❌ Неверный формат email в строке {idx + 2}")
-            
-        # Validate email format
-        email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        for email in emails:
-            if not re.match(email_regex, email):
-                raise ValueError(f"❌ Неверный формат email: {email} в строке {idx + 2}")
-        
-        # Create contact with first email as primary and rest as cc
-        contact = row.to_dict()
-        contact['email'] = emails[0]
-        contact['_cc_emails'] = emails[1:]  # Store additional emails as CC
+        # validate all found emails
+        for e in parts:
+            if not re.match(email_regex, e):
+                raise ValueError(f"❌ Неверный формат email: {e} в строке {idx + 2}")
+        primary = parts[0]
+        cc = parts[1:]
+        contact = {
+            'email': primary,
+            'name': row.get('name', ''),
+            'mall': row.get('mall', ''),
+            'city': row.get('city', ''),
+            'rim': row.get('rim', ''),
+            '_cc_emails': cc
+        }
         contacts.append(contact)
     
-    # Convert back to DataFrame for further processing
     df = pd.DataFrame(contacts)
-    
-    # Fill empty values and process other columns
-    for col in df.columns:
-        if col != '_cc_emails':  # Skip the temporary _cc_emails column
+    # Normalize text fields
+    for col in ['email', 'name', 'mall', 'city', 'rim']:
+        if col in df.columns:
             df[col] = df[col].fillna('').astype(str).str.strip()
-
+    
     if 'name' in df.columns:
         df.loc[df['name'] == '', 'name'] = 'Коллеги'
-
-    if 'mall' in df.columns:
-        df['mall'] = df['mall'].fillna('').astype(str).str.strip()
+    
+    # Group by city,mall,email,name and concatenate rim with newline
+    if 'rim' in df.columns:
+        agg_map = {'rim': lambda x: '\n'.join(filter(lambda v: v != '', map(str, x)))}
+        # preserve aggregated cc emails (unique)
+        if '_cc_emails' in df.columns:
+            agg_map['_cc_emails'] = lambda lists: list({email for lst in lists for email in (lst if isinstance(lst, list) else [lst]) if email})
+        df = df.groupby(['city', 'mall', 'email', 'name'], as_index=False).agg(agg_map)
 
     if template_text:
         required_map = {
@@ -135,9 +141,7 @@ def send_emails(my_address, password, contacts, cc_addresses, brand, period, doc
             msg['To'] = contact['email']
             if all_cc:
                 msg['Cc'] = ", ".join(all_cc)
-            
-            # Clean up mall name by removing any existing double quotes
-            mall_name = contact['mall'].replace('"', '')
+
             msg['Subject'] = f"{mall_name} (г. {contact['city']}) // {brand} // {period}"
 
             msg.attach(MIMEText(message, 'plain'))
