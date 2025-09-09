@@ -93,14 +93,21 @@ def preview_excel():
                 if any(value.startswith(prefix) for prefix in prefixes):
                     return value
                 return f"ТЦ {value}" if add_prefix else value
+            df['mall'] = df['mall'].str.replace('"', '', regex=False)
             df['mall'] = df['mall'].apply(fix_mall)
 
         df.loc[df['name'] == '', 'name'] = 'Коллеги'
-
+        
+        if 'rim' in df.columns:
+            df = (df.groupby(['city', 'mall', 'email', 'name'], as_index=False)
+                  .agg({'rim': lambda x: '\n'.join(map(str, x))}))
+            # For HTML preview replace newlines with <br> and allow HTML in to_html
+            df['rim'] = df['rim'].astype(str).str.replace('\n', '<br>', regex=False)
+        
         first_row = df.iloc[0].to_dict() if not df.empty else {}
         attrs = f'data-mall="{first_row.get("mall", "")}" data-city="{first_row.get("city", "")}"' if first_row else ""
 
-        table_html = df.to_html(classes="preview-table", index=False)
+        table_html = df.to_html(classes="preview-table", index=False, escape=False)
         return f'<div id="first-row-data" {attrs} style="display:none;"></div>' + table_html
 
     except Exception as e:
@@ -113,7 +120,6 @@ def send():
     my_address = session.get("MY_ADDRESS")
     password = session.get("PASSWORD")
 
-    # 1) Guard: user must be logged in
     if not my_address or not password:
         return render_template("status.html", status="❌ Сессия истекла. Войдите снова."), 401
 
