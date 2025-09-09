@@ -73,13 +73,19 @@ def preview_excel():
         df = pd.read_excel(io.BytesIO(file.read()))
         df = df[[col for col in df.columns if col in ALLOWED_COLUMNS]]
         df = df.fillna('').astype(str).apply(lambda x: x.str.strip())
-        df = df.loc[:, ~(df.eq('').all())]
 
+        # Check required columns BEFORE dropping any empty columns
         required_columns = {"email", "mall", "city"}
         missing_columns = required_columns - set(df.columns)
         if missing_columns:
             return f"<div style='color:red;'>❌ В файле отсутствуют обязательные столбцы: {', '.join(missing_columns)}</div>", 400
 
+        # Drop only non-required columns that are entirely empty
+        cols_to_drop = [c for c in df.columns if c not in required_columns and df[c].eq('').all()]
+        if cols_to_drop:
+            df = df.drop(columns=cols_to_drop)
+
+        # Validate rows: email must not be empty
         if df['email'].eq('').any():
             return "<div style='color:red;'>❌ В файле есть строки без email. Удалите их или заполните.</div>", 400
 
@@ -96,14 +102,16 @@ def preview_excel():
             df['mall'] = df['mall'].str.replace('"', '', regex=False)
             df['mall'] = df['mall'].apply(fix_mall)
 
+        # Ensure 'name' exists, then default blanks
+        if 'name' not in df.columns:
+            df['name'] = ''
         df.loc[df['name'] == '', 'name'] = 'Коллеги'
-        
+
         if 'rim' in df.columns:
             df = (df.groupby(['city', 'mall', 'email', 'name'], as_index=False)
                   .agg({'rim': lambda x: '\n'.join(map(str, x))}))
-            # For HTML preview replace newlines with <br> and allow HTML in to_html
             df['rim'] = df['rim'].astype(str).str.replace('\n', '<br>', regex=False)
-        
+
         first_row = df.iloc[0].to_dict() if not df.empty else {}
         attrs = f'data-mall="{first_row.get("mall", "")}" data-city="{first_row.get("city", "")}"' if first_row else ""
 
