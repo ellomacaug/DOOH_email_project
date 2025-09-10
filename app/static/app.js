@@ -1,3 +1,4 @@
+/* app/static/app.js */
 // Templates/tabs
 function initTemplates() {
   const templatesData = document.getElementById('templates-data');
