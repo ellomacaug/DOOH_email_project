@@ -3,6 +3,7 @@
 import io
 import math
 import os
+import json
 import threading
 import time
 import traceback
@@ -10,10 +11,16 @@ from uuid import uuid4
 
 import pandas as pd
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for, send_file
 from werkzeug.utils import secure_filename
 
-from app.email_sender import get_contacts_from_excel, pluralize, send_batch
+from app.email_sender import format_rim_entry, get_contacts_from_excel, pluralize, send_batch
+from app.sheet_transformer import (
+    filters_from_json,
+    inspect_sheet_source,
+    transform_sheet_source,
+    workbook_to_bytes,
+)
 
 load_dotenv()
 
@@ -28,8 +35,11 @@ app.secret_key = os.urandom(24)
 # simple in-memory job registry for background sending tasks
 # job structure: { 'status': str, 'batch': int, 'total': int or None, 'sent': int, 'error': str or None, 'done': bool, 'done_at': float or None }
 app.jobs = {}
+app.sheet_states = {}
 JOB_RETENTION_SECONDS = 7200
 JOB_REGISTRY_MAX_SIZE = 500
+SHEET_STATE_RETENTION_SECONDS = 6 * 60 * 60
+SHEET_STATE_MAX_SIZE = 100
 
 
 def _evict_old_jobs():
@@ -45,6 +55,40 @@ def _evict_old_jobs():
             break
         oldest = min(done_ids, key=lambda jid: app.jobs[jid].get('done_at', 0))
         del app.jobs[oldest]
+
+
+def _evict_old_sheet_states():
+    now = time.time()
+    cutoff = now - SHEET_STATE_RETENTION_SECONDS
+    to_remove = [state_id for state_id, state in app.sheet_states.items() if state.get('updated_at', 0) < cutoff]
+    for state_id in to_remove:
+        del app.sheet_states[state_id]
+    while len(app.sheet_states) > SHEET_STATE_MAX_SIZE:
+        oldest_state_id = min(app.sheet_states, key=lambda sid: app.sheet_states[sid].get('updated_at', 0))
+        del app.sheet_states[oldest_state_id]
+
+
+def _get_sheet_state(create=False):
+    state_id = session.get('SHEET_STATE_ID')
+    if not state_id and create:
+        state_id = str(uuid4())
+        session['SHEET_STATE_ID'] = state_id
+    if not state_id:
+        return None, None
+    state = app.sheet_states.get(state_id)
+    if state is None and create:
+        state = {'updated_at': time.time()}
+        app.sheet_states[state_id] = state
+    return state_id, state
+
+
+def _store_sheet_state(payload):
+    _evict_old_sheet_states()
+    state_id, state = _get_sheet_state(create=True)
+    state.update(payload)
+    state['updated_at'] = time.time()
+    app.sheet_states[state_id] = state
+    return state_id, state
 
 
 @app.route('/health')
@@ -85,6 +129,146 @@ def login():
             return redirect(url_for('index'))
         return render_template('login.html', error="Заполните оба поля")
     return render_template('login.html')
+
+
+@app.route('/sheet', methods=['GET'])
+def sheet_page():
+    return render_template('sheet.html')
+
+
+@app.route('/sheet/state', methods=['GET', 'POST'])
+def sheet_state():
+    if request.method == 'POST':
+        state_id, state = _get_sheet_state(create=True)
+        if not state:
+            return jsonify({'error': 'state unavailable'}), 400
+
+        payload = request.get_json(silent=True) or {}
+        if not isinstance(payload, dict):
+            return jsonify({'error': 'invalid payload'}), 400
+
+        if 'selected_columns' in payload:
+            state['selected_columns'] = payload.get('selected_columns') if isinstance(payload.get('selected_columns'), list) else []
+        if 'filters' in payload:
+            state['filters'] = payload.get('filters') if isinstance(payload.get('filters'), dict) else {}
+
+        state['updated_at'] = time.time()
+        app.sheet_states[state_id] = state
+        return jsonify({'ok': True})
+
+    state_id, state = _get_sheet_state(create=False)
+    if not state:
+        return jsonify({'has_state': False})
+
+    inspection = state.get('inspection') or {}
+    return jsonify({
+        'has_state': True,
+        'sheet_name': inspection.get('sheet_name'),
+        'header_row': inspection.get('header_row'),
+        'columns': inspection.get('columns', []),
+        'row_count': inspection.get('row_count', 0),
+        'filter_options': inspection.get('filter_options', {}),
+        'preview_rows': inspection.get('preview_rows', []),
+        'selected_columns': state.get('selected_columns', inspection.get('columns', [])),
+        'filters': state.get('filters', {}),
+        'source_type': state.get('source_type'),
+        'source_name': state.get('source_name'),
+    })
+
+
+@app.route('/sheet/inspect', methods=['POST'])
+def sheet_inspect():
+    uploaded_file = request.files.get('source_file')
+    source_url = request.form.get('source_url', '').strip() or None
+
+    if not uploaded_file and not source_url:
+        return jsonify({'error': 'Нужно загрузить файл или указать ссылку'}), 400
+
+    try:
+        source_bytes = None
+        source_name = None
+        if uploaded_file and uploaded_file.filename:
+            source_bytes = uploaded_file.read()
+            source_name = uploaded_file.filename
+            source_file = io.BytesIO(source_bytes)
+        else:
+            source_file = None
+
+        inspection = inspect_sheet_source(source_file=source_file, source_url=source_url)
+        selected_columns = inspection.get('columns', [])
+        _store_sheet_state({
+            'source_type': 'file' if source_bytes is not None else 'url',
+            'source_url': source_url,
+            'source_name': source_name,
+            'source_bytes': source_bytes,
+            'inspection': inspection,
+            'selected_columns': selected_columns,
+            'filters': {},
+        })
+        return jsonify(inspection)
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 400
+
+
+@app.route('/sheet/export', methods=['POST'])
+def sheet_export():
+    uploaded_file = request.files.get('source_file')
+    source_url = request.form.get('source_url', '').strip() or None
+    brand = request.form.get('brand', '').strip()
+    info_text = request.form.get('info_text', '').strip()
+    try:
+        selected_columns = json.loads(request.form.get('selected_columns_json', '[]') or '[]')
+    except json.JSONDecodeError:
+        selected_columns = []
+    if not isinstance(selected_columns, list):
+        selected_columns = []
+    filters = filters_from_json(request.form.get('filters_json'))
+
+    if not uploaded_file and not source_url:
+        _, state = _get_sheet_state(create=False)
+        if state:
+            if state.get('source_type') == 'file' and state.get('source_bytes'):
+                uploaded_file = io.BytesIO(state['source_bytes'])
+                source_url = None
+            elif state.get('source_url'):
+                source_url = state.get('source_url')
+            if not brand:
+                brand = request.form.get('brand', '').strip()
+
+    if not uploaded_file and not source_url:
+        return render_template('status.html', status='❌ Нужен XLSX-файл или ссылка на Google Sheets.'), 400
+
+    if not brand:
+        return render_template('status.html', status='❌ Укажите бренд.'), 400
+
+    try:
+        workbook, info = transform_sheet_source(
+            source_file=uploaded_file,
+            source_url=source_url,
+            brand=brand,
+            info_text=info_text,
+            selected_columns=selected_columns,
+            filters=filters,
+        )
+        _store_sheet_state({
+            'source_type': 'file' if hasattr(uploaded_file, 'read') and not isinstance(uploaded_file, str) else 'url',
+            'source_url': source_url,
+            'inspection': _get_sheet_state(create=False)[1].get('inspection') if _get_sheet_state(create=False)[1] else {},
+            'selected_columns': selected_columns,
+            'filters': filters,
+        })
+        filename = secure_filename(f"{brand or 'report'}_sheet_report.xlsx")
+        response = send_file(
+            io.BytesIO(workbook_to_bytes(workbook)),
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        response.headers['X-Source-Rows'] = str(info['row_count'])
+        response.headers['X-Filtered-Rows'] = str(info['filtered_row_count'])
+        return response
+    except Exception as exc:
+        return render_template('status.html', status=f'❌ Ошибка: {exc}'), 400
 
 
 @app.route('/logout')
@@ -139,54 +323,8 @@ def preview_excel():
             df['name'] = ''
         df.loc[df['name'] == '', 'name'] = 'Коллеги'
 
-        rims_required = {'rim', 'num', 'size', 'link', 'min', 'sec'}
+        rims_required = {'rim', 'num', 'size', 'link'}
         if rims_required.issubset(df.columns):
-            print('rims are in place')
-            def format_rim_entry(row):
-                # Safely get values and strip whitespace
-                rim = str(row.get('rim', '')).strip()
-                num = str(row.get('num', '')).strip()
-                size = str(row.get('size', '')).strip()
-                link = str(row.get('link', '')).strip()
-                min_ = str(row.get('min', '')).strip()
-                sec = str(row.get('sec', '')).strip()
-
-                # Case: all parts present
-                if num and size and sec and min_ and link:
-                    return f"{rim} {num} шт. {size} (ролик {sec}сек в блоке {min_} мин.) фото: {link}"
-
-                # No num and size, but have sec/min/link
-                if (not num and not size) and sec and min_ and link:
-                    return f"{rim} (ролик {sec}сек в блоке {min_} мин.) фото: {link}"
-
-                # Have sec/min but no link -> omit photo
-                if sec and min_ and not link:
-                    # include num/size if present
-                    if num and size:
-                        return f"{rim} {num} шт. {size} (ролик {sec}сек в блоке {min_} мин.)"
-                    return f"{rim} (ролик {sec}сек в блоке {min_} мин.)"
-
-                # No num/size/link but have sec/min -> same as above
-                if (not num and not size and not link) and sec and min_:
-                    return f"{rim} (ролик {sec}сек в блоке {min_} мин.)"
-
-                # No timing but have link -> show rim and photo
-                if (not num and not size and not sec and not min_) and link:
-                    return f"{rim}, фото: {link}"
-
-                # Fallback: compose available parts
-                parts = [p for p in [rim] if p]
-                if num and size:
-                    parts.append(f"{num} шт. {size}")
-                if sec and min_:
-                    parts.append(f"(ролик {sec}сек в блоке {min_} мин.)")
-                elif sec:
-                    parts.append(f"(ролик {sec}сек)")
-                if link:
-                    parts.append(f"фото: {link}")
-
-                return ' '.join(parts).strip()
-
             df['rim'] = df.apply(format_rim_entry, axis=1)
 
         if 'rim' in df.columns:

@@ -20,6 +20,28 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 SMTP_PROTOCOL = os.getenv("SMTP_PROTOCOL", "SSL").upper()
 
 
+def format_rim_entry(row):
+    """Format a rim row using whatever columns are available."""
+    rim = str(row.get('rim', '')).strip()
+    num = str(row.get('num', '')).strip()
+    size = str(row.get('size', '')).strip()
+    link = str(row.get('link', '')).strip()
+    min_ = str(row.get('min', '')).strip()
+    sec = str(row.get('sec', '')).strip()
+    
+    parts = [p for p in [rim] if p]
+    if num and size:
+        parts.append(f"{num} шт. {size}")
+    if sec and min_:
+        parts.append(f"(ролик {sec}сек в блоке {min_} мин.)")
+    elif sec:
+        parts.append(f"(ролик {sec}сек)")
+    if link:
+        parts.append(f", фото: {link}")
+
+    return ' '.join(parts).strip()
+
+
 def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=True):
     df = pd.read_excel(filepath)
     if 'email' not in df.columns:
@@ -48,11 +70,8 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=T
             mask = (~df['mall'].str.match(pat, case=False, na=False)) & (df['mall'] != '')
             df.loc[mask, 'mall'] = 'ТЦ ' + df.loc[mask, 'mall']
 
-    rims_required = {'rim', 'num', 'size', 'link', 'min', 'sec'}
-    if rims_required.issubset(df.columns):
-        def format_rim_entry(row):
-            return (f"{row['rim']} {row['num']} шт. {row['size']} (ролик {row['sec']}сек в блоке {row['min']} мин.) фото: {row['link']}").strip()
-
+    base_rim_required = {'rim', 'num', 'size', 'link'}
+    if base_rim_required.issubset(df.columns):
         df['rim'] = df.apply(format_rim_entry, axis=1)
     
     contacts = []
