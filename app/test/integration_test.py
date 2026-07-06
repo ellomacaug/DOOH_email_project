@@ -5,6 +5,8 @@ import os
 import threading
 import time
 from uuid import UUID
+from email import message_from_string
+from email.header import decode_header, make_header
 
 import pandas as pd
 import pytest
@@ -225,7 +227,7 @@ def test_send_emails_endpoint_flow(monkeypatch, tmp_path):
     def fake_send_batch(**kwargs):
         return len(kwargs.get('batch_contacts', []))
 
-    monkeypatch.setattr(es, "send_batch", fake_send_batch)
+    monkeypatch.setattr(run_app, "send_batch", fake_send_batch)
 
     monkeypatch.setattr(threading, "Thread", SyncThread)
 
@@ -257,3 +259,118 @@ def test_split_emails_various_separators():
     assert "a@example.com" in parts
     assert "f@example.com" in parts
     assert len(parts) >= 6
+
+
+def _write_xlsx_for_compare(tmp_path, rows):
+    df = pd.DataFrame(rows)
+    path = tmp_path / "contacts.xlsx"
+    df.to_excel(path, index=False)
+    return path
+
+
+def test_preview_and_send_share_mall_prefix_behavior(tmp_path):
+    client = run_app.app.test_client()
+    rows = [{"email": "x@y.com", "mall": "Афимолл", "city": "Москва", "name": "", "rim": "111"}]
+    bio = make_excel_bytes(pd.DataFrame(rows))
+
+    preview_true = client.post(
+        "/preview-excel",
+        data={"contacts_file": (io.BytesIO(bio), "contacts.xlsx"), "add_tc_prefix": "true"},
+        content_type="multipart/form-data",
+    )
+    assert "ТЦ Афимолл" in preview_true.get_data(as_text=True)
+
+    preview_false = client.post(
+        "/preview-excel",
+        data={"contacts_file": (io.BytesIO(bio), "contacts.xlsx"), "add_tc_prefix": "false"},
+        content_type="multipart/form-data",
+    )
+    assert "ТЦ Афимолл" not in preview_false.get_data(as_text=True)
+
+    path = _write_xlsx_for_compare(tmp_path, rows)
+    contacts_true = es.get_contacts_from_excel(path, add_prefix=True)
+    contacts_false = es.get_contacts_from_excel(path, add_prefix=False)
+    assert contacts_true[0]["mall"] == "ТЦ Афимолл"
+    assert contacts_false[0]["mall"] == "Афимолл"
+
+
+def test_preview_renders_br_but_send_keeps_newlines(monkeypatch, tmp_path):
+    client = run_app.app.test_client()
+    rows = [{"email": "a@example.com", "name": "A", "mall": "Mall", "city": "Msk", "rim": "111\n222"}]
+    file_path = _write_xlsx_for_compare(tmp_path, rows)
+
+    preview_resp = client.post(
+        "/preview-excel",
+        data={"contacts_file": (io.BytesIO(file_path.read_bytes()), "contacts.xlsx"), "add_tc_prefix": "false"},
+        content_type="multipart/form-data",
+    )
+    preview_html = preview_resp.get_data(as_text=True)
+    assert "111<br>222" in preview_html
+
+    captured = {}
+
+    def fake_send_batch(**kwargs):
+        captured["contacts"] = kwargs["batch_contacts"]
+        return len(kwargs.get("batch_contacts", []))
+
+    monkeypatch.setattr(run_app, "send_batch", fake_send_batch)
+    monkeypatch.setattr(threading, "Thread", SyncThread)
+
+    with client.session_transaction() as sess:
+        sess['MY_ADDRESS'] = 'me@example.com'
+        sess['PASSWORD'] = 'pw'
+        sess['DISPLAY_NAME'] = 'Me'
+
+    with open(file_path, 'rb') as upload:
+        resp = client.post(
+            "/send-emails",
+            data={
+                "contacts_file": (upload, "contacts.xlsx"),
+                "message_template": "RIM=${RIM}",
+                "batch_size": "25",
+                "pause_seconds": "0",
+                "add_tc_prefix": "false",
+            },
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+
+    assert resp.status_code == 200
+    assert captured["contacts"][0]["rim"] == "111\n222"
+
+
+def test_send_subject_differs_for_single_and_multiple_malls(monkeypatch):
+    dummy_server = DummySMTP()
+
+    def fake_smtp_ssl(host, port, context=None):
+        return dummy_server
+
+    monkeypatch.setattr(es, "SMTP_HOST", "dummy-host")
+    monkeypatch.setattr(es, "SMTP_PORT", 123)
+    monkeypatch.setattr(es, "SMTP_PROTOCOL", "SSL")
+    monkeypatch.setattr("smtplib.SMTP_SSL", fake_smtp_ssl)
+
+    contacts = [
+        {"email": "x@example.com", "name": "X", "mall_count": 1, "mall": "ТЦ One", "city": "Msk", "rim": "111", "_cc_emails": []},
+        {"email": "y@example.com", "name": "Y", "mall_count": 2, "mall": "ТЦ Two", "city": "Msk", "rim": "222", "_cc_emails": []},
+    ]
+
+    sent = es.send_batch(
+        my_address="me@example.com",
+        password="pw",
+        batch_contacts=contacts,
+        cc_addresses=[],
+        brand="Brand",
+        period="P",
+        doc="",
+        template_text="Hello ${NAME}",
+        display_name="Me",
+    )
+
+    assert sent == len(contacts)
+    first_message = message_from_string(dummy_server.sent_messages[0][2])
+    second_message = message_from_string(dummy_server.sent_messages[1][2])
+    first_subject = str(make_header(decode_header(first_message["Subject"])))
+    second_subject = str(make_header(decode_header(second_message["Subject"])))
+    assert first_subject == "ТЦ One (г. Msk) // Brand // P"
+    assert second_subject == "ТЦ Two // Brand // P"
