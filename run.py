@@ -11,7 +11,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
-from app.email_sender import format_rim_entry, get_contacts_from_excel, pluralize, send_batch
+from app.email_sender import format_rim_entry, get_contacts_from_excel, normalize_mall_column, pluralize, send_batch
 
 load_dotenv()
 
@@ -46,6 +46,14 @@ def _evict_old_jobs():
             break
         oldest = min(done_ids, key=lambda jid: app.jobs[jid].get('done_at', 0))
         del app.jobs[oldest]
+
+
+def _parse_add_tc_prefix(form):
+    """Treat any explicit true value as enabled; preserve legacy true when absent."""
+    values = [value.lower() for value in form.getlist('add_tc_prefix')]
+    if not values:
+        return True
+    return any(value == 'true' for value in values)
 
 
 
@@ -128,19 +136,10 @@ def preview_excel():
         if df['email'].eq('').any():
             return "<div style='color:red;'>В файле есть строки без email. Удалите их или заполните.</div>", 400
 
-        add_prefix = request.form.get('add_tc_prefix', 'true').lower() == 'true'
+        add_prefix = _parse_add_tc_prefix(request.form)
 
         if 'mall' in df.columns:
-            prefixes = ("ТЦ", "ТРЦ", "ТРК", "ТД", "ТК", "Молл", "ТВК", "МТЦ", "МЦ")
-            # normalize column: replace quotes, turn NaN -> empty string, strip spaces
-            df['mall'] = df['mall'].fillna('').astype(str).str.replace('"', '', regex=False).str.strip()
-
-            if add_prefix:
-                # build regex to detect any prefix at start, case-insensitive
-                pat = r'^(?:' + '|'.join(prefixes) + r')\b'
-                # mask of rows that don't already start with a prefix and are non-empty
-                mask = (~df['mall'].str.match(pat, case=False, na=False)) & (df['mall'] != '')
-                df.loc[mask, 'mall'] = 'ТЦ ' + df.loc[mask, 'mall']
+            df['mall'] = normalize_mall_column(df['mall'], add_prefix=add_prefix)
 
         if 'name' not in df.columns:
             df['name'] = ''
@@ -190,7 +189,7 @@ def send():
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], 'contacts.xlsx')
     uploaded_file.save(file_path)
     template_text = request.form.get('message_template', '')
-    add_prefix = request.form.get('add_tc_prefix', 'true').lower() == 'true'
+    add_prefix = _parse_add_tc_prefix(request.form)
 
     if not display_name and my_address:
         display_name = my_address.split('@')[0].replace('.', ' ').title()
@@ -243,6 +242,7 @@ def send():
                 if batch_index + 1 < total_batches:
                     print(f"Waiting {pause_seconds} seconds before next batch ({batch_index + 1}/{total_batches})...")
                     time.sleep(pause_seconds)
+                    
             count = len(contacts)
             word = pluralize(count, ("адрес", "адреса", "адресов"))
             app.jobs[job_id].update({'status': f"✅ Письма успешно отправлены на {count} {word}.", 'done': True, 'done_at': time.time()})

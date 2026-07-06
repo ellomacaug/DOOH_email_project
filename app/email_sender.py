@@ -20,6 +20,9 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "465"))
 SMTP_PROTOCOL = os.getenv("SMTP_PROTOCOL", "SSL").upper()
 
 
+MALL_PREFIXES = ("ТЦ", "ТРЦ", "ТРК", "ТД", "ТК", "Молл", "ТВК", "МТЦ", "МЦ")
+
+
 def format_rim_entry(row):
     """Format a rim row using whatever columns are available."""
     rim = str(row.get('rim', '')).strip()
@@ -42,6 +45,20 @@ def format_rim_entry(row):
     return ' '.join(parts).strip()
 
 
+def normalize_mall_column(mall_series, add_prefix=True):
+    """Normalize mall names and optionally add a ТЦ prefix."""
+    cleaned = mall_series.fillna('').astype(str).str.replace(r'[«»"]', '', regex=True).str.strip()
+
+    if not add_prefix:
+        return cleaned
+
+    pat = r'^(?:' + '|'.join(MALL_PREFIXES) + r')\b'
+    mask = (~cleaned.str.match(pat, case=False, na=False)) & (cleaned != '')
+    cleaned = cleaned.copy()
+    cleaned.loc[mask] = 'ТЦ ' + cleaned.loc[mask]
+    return cleaned
+
+
 def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=True):
     df = pd.read_excel(filepath)
     if 'email' not in df.columns:
@@ -59,16 +76,7 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=T
         df.loc[df['name'] == '', 'name'] = 'Коллеги'
 
     if 'mall' in df.columns:
-        prefixes = ("ТЦ", "ТРЦ", "ТРК", "ТД", "ТК", "Молл", "ТВК", "МТЦ", "МЦ")
-        # normalize column: replace quotes, turn NaN -> empty string, strip spaces
-        df['mall'] = df['mall'].fillna('').astype(str).str.replace(r'[«»"]', '', regex=True).str.strip()
-
-        if add_prefix:
-            # build regex to detect any prefix at start, case-insensitive
-            pat = r'^(?:' + '|'.join(prefixes) + r')\b'
-            # mask of rows that don't already start with a prefix and are non-empty
-            mask = (~df['mall'].str.match(pat, case=False, na=False)) & (df['mall'] != '')
-            df.loc[mask, 'mall'] = 'ТЦ ' + df.loc[mask, 'mall']
+        df['mall'] = normalize_mall_column(df['mall'], add_prefix=add_prefix)
 
     base_rim_required = {'rim', 'num', 'size', 'link'}
     if base_rim_required.issubset(df.columns):
@@ -116,16 +124,7 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=T
                 mall_names_list = []
                 mall_rims_pairs = []  # list of (mall_name_prefixed, rims_text)
                 for mall_name, mall_df in email_df.groupby('mall', as_index=False):
-                    # normalize and optionally add prefix
-                    if add_prefix:
-                        prefixes = ("ТЦ", "ТРЦ", "ТРК", "ТД", "ТК", "Молл", "ТВК", "МТЦ", "МЦ")
-                        pat = r'^(?:' + '|'.join(prefixes) + r')\b'
-                        if not re.match(pat, str(mall_name), re.IGNORECASE):
-                            mall_name_prefixed = "ТЦ " + str(mall_name)
-                        else:
-                            mall_name_prefixed = str(mall_name)
-                    else:
-                        mall_name_prefixed = str(mall_name)
+                    mall_name_prefixed = normalize_mall_column(pd.Series([mall_name]), add_prefix=add_prefix).iloc[0]
 
                     mall_names_list.append(mall_name_prefixed)
 
@@ -205,44 +204,6 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=T
 def read_template(template_path):
     with open(template_path, 'r', encoding='utf-8') as file:
         return Template(file.read())
-
-
-def send_emails(my_address, password, contacts, cc_addresses, brand, period, doc, template_text, display_name, batch_size=25, pause_seconds=90, progress_callback=None):
-
-    template = Template(template_text)
-    context = ssl.create_default_context()
-    cc_addresses = cc_addresses or []
-
-    total_contacts = len(contacts)
-    total_batches = ceil(total_contacts / batch_size)
-
-    for batch_index in range(total_batches):
-        start = batch_index * batch_size
-        end = min(start + batch_size, total_contacts)
-        batch_contacts = contacts[start:end]
-        # For backward compatibility we'll still support internal batching here by
-        # delegating to the simpler `send_batch` primitive. This keeps SMTP open/close
-        # inside this module while allowing external orchestration to call send_batch
-        # directly.
-        sent = send_batch(
-            my_address=my_address,
-            password=password,
-            batch_contacts=batch_contacts,
-            cc_addresses=cc_addresses,
-            brand=brand,
-            period=period,
-            doc=doc,
-            template_text=template_text,
-            display_name=display_name
-        )
-
-        sent_count = (batch_index + 1) * batch_size if (batch_index + 1) * batch_size < total_contacts else total_contacts
-        if progress_callback:
-            progress_callback(batch_index + 1, total_batches, sent_count)
-
-        if batch_index + 1 < total_batches:
-            print(f"Waiting {pause_seconds} seconds before next batch ({batch_index + 1}/{total_batches})...")
-            time.sleep(pause_seconds)
 
 
 def send_batch(my_address, password, batch_contacts, cc_addresses, brand, period, doc, template_text, display_name):
