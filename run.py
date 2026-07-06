@@ -3,16 +3,13 @@
 import io
 import math
 import os
-import json
 import threading
 import time
-import traceback
 from uuid import uuid4
 
 import pandas as pd
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for, send_file
-from werkzeug.utils import secure_filename
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
 from app.email_sender import format_rim_entry, get_contacts_from_excel, pluralize, send_batch
 
@@ -51,38 +48,7 @@ def _evict_old_jobs():
         del app.jobs[oldest]
 
 
-def _evict_old_sheet_states():
-    now = time.time()
-    cutoff = now - SHEET_STATE_RETENTION_SECONDS
-    to_remove = [state_id for state_id, state in app.sheet_states.items() if state.get('updated_at', 0) < cutoff]
-    for state_id in to_remove:
-        del app.sheet_states[state_id]
-    while len(app.sheet_states) > SHEET_STATE_MAX_SIZE:
-        oldest_state_id = min(app.sheet_states, key=lambda sid: app.sheet_states[sid].get('updated_at', 0))
-        del app.sheet_states[oldest_state_id]
 
-
-def _get_sheet_state(create=False):
-    state_id = session.get('SHEET_STATE_ID')
-    if not state_id and create:
-        state_id = str(uuid4())
-        session['SHEET_STATE_ID'] = state_id
-    if not state_id:
-        return None, None
-    state = app.sheet_states.get(state_id)
-    if state is None and create:
-        state = {'updated_at': time.time()}
-        app.sheet_states[state_id] = state
-    return state_id, state
-
-
-def _store_sheet_state(payload):
-    _evict_old_sheet_states()
-    state_id, state = _get_sheet_state(create=True)
-    state.update(payload)
-    state['updated_at'] = time.time()
-    app.sheet_states[state_id] = state
-    return state_id, state
 
 
 @app.route('/health')
@@ -151,7 +117,7 @@ def preview_excel():
         required_columns = {"email", "mall", "city"}
         missing_columns = required_columns - set(df.columns)
         if missing_columns:
-            return f"<div style='color:red;'>❌ В файле отсутствуют обязательные столбцы: {', '.join(missing_columns)}</div>", 400
+            return f"<div style='color:red;'>В файле отсутствуют обязательные столбцы: {', '.join(missing_columns)}</div>", 400
 
         # Drop only non-required columns that are entirely empty
         cols_to_drop = [c for c in df.columns if c not in required_columns and df[c].eq('').all()]
@@ -160,7 +126,7 @@ def preview_excel():
 
         # Validate rows: email must not be empty
         if df['email'].eq('').any():
-            return "<div style='color:red;'>❌ В файле есть строки без email. Удалите их или заполните.</div>", 400
+            return "<div style='color:red;'>В файле есть строки без email. Удалите их или заполните.</div>", 400
 
         add_prefix = request.form.get('add_tc_prefix', 'true').lower() == 'true'
 

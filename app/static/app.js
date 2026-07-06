@@ -74,9 +74,16 @@ function previewExcel(file) {
   formData.append("add_tc_prefix", addPrefix);
 
   fetch("/preview-excel", { method: "POST", body: formData })
-    .then(response => {
-      if (!response.ok) throw new Error("Ошибка при чтении Excel");
-      return response.text();
+    .then(async response => {
+      const text = await response.text();
+      if (!response.ok) {
+        const message = text
+          .replace(/<[^>]*>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        throw new Error(message || "Ошибка при чтении Excel");
+      }
+      return text;
     })
     .then(html => {
       preview.innerHTML = html;
