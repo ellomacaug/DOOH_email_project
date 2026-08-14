@@ -163,7 +163,12 @@ function initDelayedSubmit() {
           clearInterval(countdownTimer);
           countdownBox.style.display = "none";
           delayedBtn.disabled = false;
-          if (window.htmx) window.htmx.trigger(form, "submitForm");
+          if (window.htmx) {
+            window.htmx.trigger(form, "submitForm");
+          } else {
+            // Fallback if external HTMX CDN is temporarily unavailable
+            form.submit();
+          }
         } else {
           countdownText.textContent = `Отправка через ${secondsLeft} сек...`;
         }
