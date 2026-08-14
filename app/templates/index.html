@@ -1,137 +1,132 @@
 <!-- app/templates/index.html -->
 <!DOCTYPE html>
 <html lang="ru">
+
 <head>
-  <!-- Yandex.Metrika counter -->
-  <script type="text/javascript">
-      (function(m,e,t,r,i,k,a){
-          m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
-          m[i].l=1*new Date();
-          for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
-          k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
-      })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=104640090', 'ym');
+    <!-- Yandex.Metrika counter -->
+    <script type="text/javascript">
+        (function (m, e, t, r, i, k, a) {
+            m[i] = m[i] || function () {(m[i].a = m[i].a || []).push(arguments)};
+            m[i].l = 1 * new Date();
+            for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) {return;} }
+            k = e.createElement(t), a = e.getElementsByTagName(t)[0], k.async = 1, k.src = r, a.parentNode.insertBefore(k, a)
+        })(window, document, 'script', 'https://mc.yandex.ru/metrika/tag.js?id=104640090', 'ym');
 
-      ym(104640090, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", accurateTrackBounce:true, trackLinks:true});
-  </script>
-  <noscript><div><img src="https://mc.yandex.ru/watch/104640090" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
-  <!-- /Yandex.Metrika counter -->
-  <meta charset="UTF-8">
-  <title>DOOH Email Client</title>
-  <script src="https://unpkg.com/htmx.org@1.9.2"></script>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap&subset=cyrillic" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css">
+        ym(104640090, 'init', {ssr: true, webvisor: true, clickmap: true, ecommerce: "dataLayer", accurateTrackBounce: true, trackLinks: true});
+    </script>
+    <noscript>
+        <div><img src="https://mc.yandex.ru/watch/104640090" style="position:absolute; left:-9999px;" alt="" /></div>
+    </noscript>
+    <!-- /Yandex.Metrika counter -->
+    <meta charset="UTF-8">
+    <title>DOOH Email Client</title>
+    <script src="https://unpkg.com/htmx.org@1.9.2" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&display=swap&subset=cyrillic"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
+
 <body>
-  <div class="top-right">
-    <a href="/logout" class="secondary-btn-out">Выйти</a>
-  </div>
-  <h1>✉ DOOH Email Client ✉</h1>
-
-    <form
-      hx-post="/send-emails"
-      hx-trigger="submitForm"
-      hx-target="#status"
-      hx-swap="innerHTML"
-      method="POST"
-      enctype="multipart/form-data"
-    >
-
-    <label>1. Шаблон письма</label>
-    <div class="template-tabs" id="template-tabs">
-      <div class="template-tab active" data-value="new_rim">Новый ТЦ</div>
-      <div class="template-tab" data-value="check_rim">Упакованный ТЦ</div>
-      <div class="template-tab" data-value="check">Напоминалка</div>
-      <div class="template-tab" data-value="confirm">Подтверждение</div>
-      <div class="template-tab" data-value="media">Ролики</div>
-      <div class="template-tab" data-value="close">Закрывающие</div>
+    <div class="top-right">
+        <a href="/logout" class="secondary-btn-out">Выйти</a>
     </div>
+    <h1>✉ DOOH Email Client ✉</h1>
 
-    <textarea id="message_template" name="message_template" rows="16">{{ default_template }}</textarea>
-    <input type="hidden" name="template_name" id="template_name" value="check">
+    <form hx-post="/send-emails" hx-trigger="submitForm" hx-target="#status" hx-swap="innerHTML" method="POST"
+        enctype="multipart/form-data">
 
-    <span style="color:#949494;">Проверьте подпись!</span>
+        <label>1. Шаблон письма</label>
+        <div class="template-tabs" id="template-tabs">
+            <div class="template-tab active" data-value="new_rim">Новый ТЦ</div>
+            <div class="template-tab" data-value="check_rim">Упакованный ТЦ</div>
+            <div class="template-tab" data-value="check">Напоминалка</div>
+            <div class="template-tab" data-value="confirm">Подтверждение</div>
+            <div class="template-tab" data-value="media">Ролики</div>
+            <div class="template-tab" data-value="close">Закрывающие</div>
+        </div>
 
-    <label style="margin-top: 10px;">2. Контактный Excel файл (.xlsx)</label>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-      <div style="max-width: 70%;">
-        Выбрав нужный шаблон письма сверху, останутся только нужные поля по кнопке:<br>
-        <span style="color:red">*</span> mall – ТЦ<br>
-        <span style="color:red">*</span> city – Город<br>
-        <span style="color:red">*</span> email – Почта<br>
-        * name – Имя (или пусто)<br>
-        * rim – Носитель<br>
-        * link – Ссылка на ФО/ролики<br>
-        * min – Блок (мин)<br>
-        * sec – Хронометраж (сек)<br>
-      </div>
-      <div class="button-with-text">
-        <button type="button" id="contacts-template-btn" class="secondary-btn">
-          Скачать
-        </button>
-        <p class="button-description">Шаблон файла<br>контактов</p>
-      </div>
-    </div>
+        <textarea id="message_template" name="message_template" rows="16">{{ default_template }}</textarea>
+        <input type="hidden" name="template_name" id="template_name" value="check">
 
-    <input
-      type="file"
-      name="contacts_file"
-      required
-      id="contacts_file"
-      onchange="handleFileChange(this.files[0])"
-    >
+        <span style="color:#949494;">Проверьте подпись!</span>
 
-    <label>Превью загруженного списка контактов:</label>
-    <div id="preview"></div>
+        <label style="margin-top: 10px;">2. Контактный Excel файл (.xlsx)</label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="max-width: 70%;">
+                Выбрав нужный шаблон письма сверху, останутся только нужные поля по кнопке:<br>
+                <span style="color:red">*</span> mall – ТЦ<br>
+                <span style="color:red">*</span> city – Город<br>
+                <span style="color:red">*</span> email – Почта<br>
+                * name – Имя (или пусто)<br>
+                * rim – Носитель<br>
+                * link – Ссылка на ФО/ролики<br>
+                * min – Блок (мин)<br>
+                * sec – Хронометраж (сек)<br>
+            </div>
+            <div class="button-with-text">
+                <button type="button" id="contacts-template-btn" class="secondary-btn">
+                    Скачать
+                </button>
+                <p class="button-description">Шаблон файла<br>контактов</p>
+            </div>
+        </div>
 
-    <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #949494;">
-      <input type="hidden" name="add_tc_prefix" value="false">
-      <input type="checkbox" name="add_tc_prefix" value="true" id="add-tc-prefix" checked>
-      Добавить "ТЦ" к названиям, где его нет
-    </div>
+        <input type="file" name="contacts_file" required id="contacts_file" onchange="handleFileChange(this.files[0])">
 
-    <label>3. Бренд <span class="hint">${BRAND}</span></label>
-    <input type="text" name="brand" list="brand-list" placeholder="Например: Лэтуаль" required>
+        <label>Превью загруженного списка контактов:</label>
+        <div id="preview"></div>
 
-    <datalist id="brand-list"></datalist>
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 10px; color: #949494;">
+            <input type="hidden" name="add_tc_prefix" value="false">
+            <input type="checkbox" name="add_tc_prefix" value="true" id="add-tc-prefix" checked>
+            Добавить "ТЦ" к названиям, где его нет
+        </div>
 
-    <label>4. Период <span class="hint">${PERIOD}</span></label>
-    <input type="text" name="period" list="period-list" placeholder="Например: 01.09.2025 - 30.04.2026" required>
+        <label>3. Бренд <span class="hint">${BRAND}</span></label>
+        <input type="text" name="brand" list="brand-list" placeholder="Например: Лэтуаль" required>
 
-    <datalist id="period-list"></datalist>
+        <datalist id="brand-list"></datalist>
 
-    <label>5. Тема письма (предпросмотр)</label>
-    <div id="subject-preview-box" style="margin-bottom: 20px; font-size: 14px; color: #555; display: none;"></div>
+        <label>4. Период <span class="hint">${PERIOD}</span></label>
+        <input type="text" name="period" list="period-list" placeholder="Например: 01.09.2025 - 30.04.2026" required>
 
-    <label>6. Ссылка на папку с реквизитами <span class="hint">В подтверждение</span></label>
-    <input type="text" name="doc" list="doc-list" placeholder="https://example.com/...">
+        <datalist id="period-list"></datalist>
 
-    <datalist id="doc-list"></datalist>
+        <label>5. Тема письма (предпросмотр)</label>
+        <div id="subject-preview-box" style="margin-bottom: 20px; font-size: 14px; color: #555; display: none;"></div>
+
+        <label>6. Ссылка на папку с реквизитами <span class="hint">В подтверждение</span></label>
+        <input type="text" name="doc" list="doc-list" placeholder="https://example.com/...">
+
+        <datalist id="doc-list"></datalist>
 
 
-    <label>7. Кого в копию (CC) через запятую</label>
-    <input type="text" name="cc_list" list="cc-list" placeholder="example1@mail.com, example2@mail.com">
+        <label>7. Кого в копию (CC) через запятую</label>
+        <input type="text" name="cc_list" list="cc-list" placeholder="example1@mail.com, example2@mail.com">
 
-    <datalist id="cc-list"></datalist>
+        <datalist id="cc-list"></datalist>
 
-    <div style="display: flex; align-items: center; gap: 16px; margin-top: 20px;">
-      <button type="button" id="delayed-submit" class="primary-btn">
-        <span class="emoji">✉</span>
-        <span class="text">Отправить письма</span>
-      </button>
-      <div id="countdown-box" style="display: none; color: #555; align-items: center; gap: 10px;">
-        <span id="countdown-text">Отправка через 5 сек...</span>
-        <button type="button" id="cancel-submit" class="primary-btn cancel-btn">⛔ Отменить</button>
-      </div>
-    </div>
+        <div style="display: flex; align-items: center; gap: 16px; margin-top: 20px;">
+            <button type="button" id="delayed-submit" class="primary-btn">
+                <span class="emoji">✉</span>
+                <span class="text">Отправить письма</span>
+            </button>
+            <div id="countdown-box" style="display: none; color: #555; align-items: center; gap: 10px;">
+                <span id="countdown-text">Отправка через 5 сек...</span>
+                <button type="button" id="cancel-submit" class="primary-btn cancel-btn">⛔ Отменить</button>
+            </div>
+        </div>
 
-  </form>
+    </form>
 
-  <div id="status"></div>
+    <div id="status"></div>
 
-  <p style="text-align:center;">Сделано Ксюшей <3</p>
-  <p style="text-align:center;color: #555;font-size: 10px;">https://github.com/ellomacaug/DOOH_email_project</p>
+    <p style="text-align:center;">Сделано Ксюшей <3< /p>
+            <p style="text-align:center;color: #555;font-size: 10px;">https://github.com/ellomacaug/DOOH_email_project
+            </p>
 
-  <script id="templates-data" type="application/json"> {{ templates|tojson }}</script>
-  <script src="/static/app.js" defer></script>
+            <script id="templates-data" type="application/json"> {{ templates|tojson }}</script>
+            <script src="/static/app.js" defer></script>
 </body>
+
 </html>

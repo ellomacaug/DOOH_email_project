@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   dooh:
@@ -8,3 +8,9 @@ services:
     ports:
       - "7860:5000"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
