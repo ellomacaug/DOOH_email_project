@@ -125,6 +125,78 @@ function initPreviewHandlers() {
   };
 }
 
+function initTableHoverPreview() {
+  const preview = document.getElementById("preview");
+  if (!preview || preview.dataset.hoverPreviewInit === "1") return;
+  preview.dataset.hoverPreviewInit = "1";
+
+  const tooltip = document.createElement("div");
+  tooltip.className = "cell-hover-preview";
+  tooltip.style.display = "none";
+  document.body.appendChild(tooltip);
+
+  const gap = 14;
+
+  function hideTooltip() {
+    tooltip.style.display = "none";
+    tooltip.textContent = "";
+  }
+
+  function moveTooltip(event) {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    tooltip.style.left = "0px";
+    tooltip.style.top = "0px";
+    tooltip.style.display = "block";
+
+    const rect = tooltip.getBoundingClientRect();
+    let left = event.clientX + gap;
+    let top = event.clientY + gap;
+
+    if (left + rect.width > viewportWidth - 8) {
+      left = event.clientX - rect.width - gap;
+    }
+    if (top + rect.height > viewportHeight - 8) {
+      top = event.clientY - rect.height - gap;
+    }
+
+    left = Math.max(8, left);
+    top = Math.max(8, top);
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
+  preview.addEventListener("mousemove", (event) => {
+    const cell = event.target.closest(".preview-table td, .preview-table th");
+    if (!cell || !preview.contains(cell)) {
+      hideTooltip();
+      return;
+    }
+
+    const fullText = (cell.innerText || "").trim();
+    if (!fullText) {
+      hideTooltip();
+      return;
+    }
+
+    const shouldShow = cell.scrollWidth > cell.clientWidth || fullText.includes("\n");
+    if (!shouldShow) {
+      hideTooltip();
+      return;
+    }
+
+    if (tooltip.textContent !== fullText) {
+      tooltip.textContent = fullText;
+    }
+    moveTooltip(event);
+  });
+
+  preview.addEventListener("mouseleave", hideTooltip);
+  preview.addEventListener("scroll", hideTooltip);
+}
+
 // Delayed submit with HTMX
 function initDelayedSubmit() {
   const form = document.querySelector("form");
@@ -222,6 +294,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initTemplates();
   initSubjectPreview();
   initPreviewHandlers();
+  initTableHoverPreview();
   initDelayedSubmit();
   initDatalistPersistence();
 });
