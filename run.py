@@ -15,6 +15,7 @@ from app.email_sender import (
     format_rim_entry,
     get_contacts_from_excel,
     normalize_mall_column,
+    normalize_rim_type,
     pluralize,
     send_batch,
 )
@@ -159,6 +160,11 @@ def preview_excel():
 
         if "mall" in df.columns:
             df["mall"] = normalize_mall_column(df["mall"], add_prefix=add_prefix)
+
+        if "type" in df.columns:
+            df["type"] = df["type"].apply(normalize_rim_type)
+        else:
+            df["type"] = "digital"
 
         if "name" not in df.columns:
             df["name"] = ""

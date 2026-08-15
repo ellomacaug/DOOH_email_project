@@ -21,6 +21,15 @@ SMTP_TIMEOUT = float(os.getenv("SMTP_TIMEOUT", "30"))
 MALL_PREFIXES = ("ТЦ", "ТРЦ", "ТРК", "ТД", "ТК", "Молл", "ТВК", "МТЦ", "МЦ")
 
 
+def normalize_rim_type(value):
+    value = str(value).strip().lower()
+    if value in {"static", "статик"}:
+        return "static"
+    if value in {"digital", "dooh", "digital indoor", "dooh, digital indoor", "digital indoor, dooh"}:
+        return "digital"
+    return "digital"
+
+
 def stringify_cell(value):
     if pd.isna(value):
         return ""
@@ -31,7 +40,7 @@ def stringify_cell(value):
 
 def format_rim_entry(row):
     """Format a rim row using whatever columns are available."""
-    rim_type = str(row.get("type", "digital")).lower().strip()
+    rim_type = normalize_rim_type(row.get("type", "digital"))
     rim = str(row.get("rim", "")).strip()
     size = str(row.get("size", "")).strip()
     link = str(row.get("link", "")).strip()
