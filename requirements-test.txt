@@ -1,8 +1,0 @@
-pytest
-pytest-playwright
-pytest-html
-pytest-base-url
-pytest-xdist
-playwright
-requests
-python-dotenv
