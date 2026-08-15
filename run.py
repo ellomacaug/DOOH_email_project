@@ -25,8 +25,6 @@ app = Flask(__name__, template_folder="app/templates", static_folder="app/static
 app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "app", "data")
 app.secret_key = os.urandom(24)
 
-# simple in-memory job registry for background sending tasks
-# job structure: { 'status': str, 'batch': int, 'total': int or None, 'sent': int, 'error': str or None, 'done': bool, 'done_at': float or None }
 app.jobs = {}
 app.sheet_states = {}
 JOB_RETENTION_SECONDS = 7200
@@ -121,6 +119,7 @@ def preview_excel():
         "name",
         "city",
         "mall",
+        "type",
         "rim",
         "link",
         "min",

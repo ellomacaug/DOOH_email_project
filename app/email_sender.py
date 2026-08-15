@@ -4,12 +4,9 @@ import os
 import re
 import smtplib
 import ssl
-import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
-from math import ceil
-from pathlib import Path
 from string import Template
 
 import pandas as pd
@@ -24,26 +21,35 @@ SMTP_TIMEOUT = float(os.getenv("SMTP_TIMEOUT", "30"))
 MALL_PREFIXES = ("ТЦ", "ТРЦ", "ТРК", "ТД", "ТК", "Молл", "ТВК", "МТЦ", "МЦ")
 
 
+def stringify_cell(value):
+    if pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if text.endswith(".0") and text[:-2].isdigit():
+        return text[:-2]
+    return text
+
 def format_rim_entry(row):
     """Format a rim row using whatever columns are available."""
+    rim_type = str(row.get("type", "digital")).lower().strip()
     rim = str(row.get("rim", "")).strip()
-    num = str(row.get("num", "")).strip()
     size = str(row.get("size", "")).strip()
     link = str(row.get("link", "")).strip()
-    min_ = str(row.get("min", "")).strip()
-    sec = str(row.get("sec", "")).strip()
+    min_ = stringify_cell(row.get("min", ""))
+    sec = stringify_cell(row.get("sec", ""))
+    num = stringify_cell(row.get("num", ""))
 
     parts = [p for p in [rim] if p]
     if num and size:
         parts.append(f"{num} шт. {size}")
-    if sec and min_:
+    if rim_type == "digital" and sec and min_:
         parts.append(f"(ролик {sec}сек в блоке {min_} мин.)")
-    elif sec:
+    elif rim_type == "digital" and sec:
         parts.append(f"(ролик {sec}сек)")
     if link:
         parts.append(f", фото: {link}")
 
-    return " ".join(parts).strip()
+    return " ".join(parts).strip().replace(" ,", ",")
 
 
 def normalize_mall_column(mall_series, add_prefix=True):
@@ -74,17 +80,22 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=T
 
     email_regex = r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$"
 
-    for col in ["email", "name", "mall", "city", "rim"]:
+    for col in ["email", "name", "mall", "city", "rim", "type", "min", "sec", "num", "size"]:
         if col in df.columns:
             df[col] = df[col].fillna("").astype(str).str.strip()
-
+            
     if "name" in df.columns:
         df.loc[df["name"] == "", "name"] = "Коллеги"
+
+    if "type" in df.columns:
+        df["type"] = df["type"]
+    else:
+        df["type"] = "digital"
 
     if "mall" in df.columns:
         df["mall"] = normalize_mall_column(df["mall"], add_prefix=add_prefix)
 
-    base_rim_required = {"rim", "num", "size", "link"}
+    base_rim_required = {"rim", "num", "size"}
     if base_rim_required.issubset(df.columns):
         df["rim"] = df.apply(format_rim_entry, axis=1)
 
@@ -101,7 +112,6 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=T
         primary = parts[0]
         cc = parts[1:]
 
-        # add here
         contact = {
             "email": primary,
             "name": row.get("name", ""),
@@ -133,7 +143,7 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=T
 
             if "mall" in email_df.columns:
                 mall_names_list = []
-                mall_rims_pairs = []  # list of (mall_name_prefixed, rims_text)
+                mall_rims_pairs = [] 
                 for mall_name, mall_df in email_df.groupby("mall", as_index=False):
                     mall_name_prefixed = normalize_mall_column(
                         pd.Series([mall_name]), add_prefix=add_prefix
@@ -194,18 +204,6 @@ def get_contacts_from_excel(filepath, template_text=None, doc=None, add_prefix=T
         if missing_cols:
             raise ValueError(
                 f"❌ Нет необходимого столбца(ов): {', '.join(missing_cols)}"
-            )
-
-        empty_required = []
-        for ph, col in required_map.items():
-            if ph in placeholders and col in df.columns:
-                if df[col].fillna("").astype(str).str.strip().eq("").any():
-                    empty_required.append(col)
-        if empty_required:
-            raise ValueError(
-                "❌ В обязательных столбцах есть пустые значения: "
-                + ", ".join(empty_required)
-                + ". Заполните их или удалите строки."
             )
 
         if "DOC" in placeholders and not (doc and str(doc).strip()):
