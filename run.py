@@ -26,11 +26,8 @@ app.config["UPLOAD_FOLDER"] = os.path.join(app.root_path, "app", "data")
 app.secret_key = os.urandom(24)
 
 app.jobs = {}
-app.sheet_states = {}
 JOB_RETENTION_SECONDS = 7200
 JOB_REGISTRY_MAX_SIZE = 500
-SHEET_STATE_RETENTION_SECONDS = 6 * 60 * 60
-SHEET_STATE_MAX_SIZE = 100
 
 
 def _evict_old_jobs():
