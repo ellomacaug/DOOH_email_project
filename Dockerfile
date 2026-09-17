@@ -37,5 +37,5 @@ USER user
 # Run the app with gunicorn
 # - finite timeout: prevents permanently stuck workers
 # - multiple workers: one slow request won't block all traffic
-# - max-requests(+jitter): recycles workers to mitigate long-lived leaks
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app", "--workers", "2", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-", "--timeout", "120", "--graceful-timeout", "30", "--max-requests", "300", "--max-requests-jitter", "50"]
+# maybe 1000 max-requests(+ 0 jitter): recycles workers to mitigate long-lived leaks
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app", "--workers", "2", "--log-level", "info", "--access-logfile", "-", "--error-logfile", "-", "--timeout", "120", "--graceful-timeout", "30"]
